@@ -1,0 +1,36 @@
+Version DEFINITIONS AUTOMATIC TAGS ::=
+BEGIN
+
+Version ::= SEQUENCE {
+    major INTEGER (0 .. 1023),
+    minor INTEGER (0 .. 1023),
+    sub INTEGER(0 .. 4095)
+}
+
+VersionRangeElemMajor ::= SEQUENCE {
+    major INTEGER (0 .. 1023)
+}
+
+VersionRangeElemMinor ::= SEQUENCE {
+    major INTEGER (0 .. 1023),
+    minor INTEGER (0 .. 1023)
+}
+
+VersionRangeElemSub ::= SEQUENCE {
+    major INTEGER (0 .. 1023),
+    minor INTEGER (0 .. 1023),
+    sub INTEGER(0 .. 4095)
+}
+
+VersionRangeElem ::= CHOICE {
+    Major VersionRangeElemMajor,
+    Minor VersionRangeElemMinor,
+    Sub VersionRangeElemSub
+}
+
+VersionRange ::= SEQUENCE {
+    lower VersionRangeElem OPTIONAL,
+    upper VersionRangeElem OPTIONAL
+}
+
+END
