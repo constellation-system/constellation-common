@@ -76,7 +76,7 @@ pub trait History {
         config: &Self::Config
     );
 
-    // XXX technical debt item.  The need for this should be
+    // ISSUE #8: Technical debt item.  The need for this should be
     // eliminated eventually.
     fn clear_score_cache(&mut self);
 
@@ -145,8 +145,8 @@ struct MultiSched<Item, Origin, H: History> {
     ids: HashMap<Item, usize>,
     /// Mapping from dense indexes to records.
     items: Vec<(Item, Origin, Record<H>)>,
-    // XXX at present, this is implemented as a lazily-sorted array.
-    // We can do etter with a binary heap, but the default Rust one
+    // ISSUE #9: at present, this is implemented as a lazily-sorted array.
+    // We can do better with a binary heap, but the default Rust one
     // doesn't provide an easy way to update scores.
     /// Order of preference for addresses.
     ordering: Vec<usize>
@@ -524,7 +524,7 @@ where
             record.history.cache_score(config)
         }
 
-        // XXX this is bad, but the ordering array is a bad solution anyway.
+        // ISSUE #8: this needs to be eliminated.
         let mut ordering = self.ordering.clone();
 
         ordering.sort_unstable_by(|idx_a, idx_b| {
