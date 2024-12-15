@@ -30,7 +30,6 @@
 //! * Placing the functionality in another package results in a dependency
 //!   cycle, or otherwise pointless dependency relationships.
 #![feature(peer_credentials_unix_socket)]
-#![feature(get_mut_unchecked)]
 #![allow(clippy::redundant_field_names)]
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::too_many_arguments)]
