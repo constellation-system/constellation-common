@@ -198,9 +198,37 @@ jobs:
       - name: Check license header
         uses: apache/skywalking-eyes/header@main
 
+  dep-branches:
+    name: Constellation dependency branch check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Cache
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-rust-crates
+        with:
+          path: ~/.cargo
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/Cargo.lock') }}
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+
+      - name: Check branches for constellation dependencies
+        run: |
+          if `cargo tree | grep github.com/constellation-system | sed  's/[^?]*?//' | sed 's/#.*//' | sed 's/branch=//' | grep -Evq "^devel$"`; then
+            echo "Constellation depnedencies not on devel branch:"
+            cargo tree | grep github.com/constellation-system
+            exit 1
+          fi
+
   test-debug:
     name: Run tests with debug build
-    needs: [format, check, lint, audit, license]
+    needs: [format, check, lint, audit, license, dep-branches]
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -289,7 +317,7 @@ jobs:
 
   test-release:
     name: Run tests with release build
-    needs: [format, check, lint, audit, license]
+    needs: [format, check, lint, audit, license, dep-branches]
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
