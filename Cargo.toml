@@ -19,6 +19,7 @@
 [package]
 name = "constellation-common"
 description = "Common definitions and functionality for the Constellation distributed systems platform"
+repository = "https://github.com/constellation-system/constellation-common"
 version = "0.0.0"
 authors = [ "Eric McCorkle <eric.mccorkle@jhuapl.edu>" ]
 edition = "2018"
@@ -39,10 +40,10 @@ openssl-vendored = ["openssl/vendored"]
 unix = []
 
 [dependencies]
-asn1rs = { version = "0.2" }
+asn1rs = { version = "0.3" }
 blake2 = { version = "0.10" }
 digest = { version = "0.10" }
-libgssapi = { version = "0.7", optional = true }
+libgssapi = { version = "0.8", optional = true }
 log = { version = "0.4", optional = true }
 openssl = { version = "0.10", optional = true }
 rand = { version = "0.8" }
