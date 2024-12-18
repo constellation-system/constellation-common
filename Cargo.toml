@@ -56,7 +56,7 @@ time = { version = "0.3" }
 whirlpool = { version = "0.10" }
 
 [build-dependencies]
-asn1rs = { version = "0.2" }
+asn1rs = { version = "0.3" }
 
 [dev-dependencies]
 env_logger = { version = "0.10" }
