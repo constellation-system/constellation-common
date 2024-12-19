@@ -19,13 +19,45 @@
 [package]
 name = "constellation-common"
 description = "Common definitions and functionality for the Constellation distributed systems platform"
+repository = "https://github.com/constellation-system/constellation-common"
 version = "0.0.0"
 authors = [ "Eric McCorkle <eric.mccorkle@jhuapl.edu>" ]
 edition = "2018"
-rust-version = "1.82"
+rust-version = "1.81"
 license = "AGPL-3.0-only"
 keywords = ["distributed systems"]
 categories = ["network-programming"]
 exclude = [
     ".gitignore"
 ]
+
+[features]
+default = ["gssapi","log","openssl","unix"]
+log = ["dep:log"]
+gssapi = ["dep:libgssapi"]
+openssl = ["dep:openssl"]
+openssl-vendored = ["openssl/vendored"]
+unix = []
+
+[dependencies]
+asn1rs = { version = "0.3" }
+blake2 = { version = "0.10" }
+digest = { version = "0.10" }
+libgssapi = { version = "0.8", optional = true }
+log = { version = "0.4", optional = true }
+openssl = { version = "0.10", optional = true }
+rand = { version = "0.8" }
+ripemd = { version = "0.1" }
+serde = { version = "1.0", features = ["derive"] }
+sha2 = { version = "0.10" }
+sha3 = { version = "0.10" }
+skein = { version = "0.1" }
+time = { version = "0.3" }
+whirlpool = { version = "0.10" }
+
+[build-dependencies]
+asn1rs = { version = "0.3" }
+
+[dev-dependencies]
+env_logger = { version = "0.10" }
+serde_yaml = { version = "0.9" }

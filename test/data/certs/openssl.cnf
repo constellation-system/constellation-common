@@ -1,0 +1,138 @@
+HOME			= ./test/data/certs
+
+[ ca ]
+default_ca              = CA_server
+
+[ CA_server ]
+
+dir                     = $HOME/server
+certs                   = $dir/certs
+crl_dir                 = $dir/crl
+database                = $dir/index.txt
+new_certs_dir           = $dir/newcerts
+certificate             = $dir/ca_cert.pem
+serial                  = $dir/serial
+crlnumber               = $dir/crlnumber
+crl                     = $dir/crl.pem
+private_key             = $dir/ca_key.pem
+x509_extensions         = usr_cert
+crl_extensions          = crl_ext
+default_md              = sha384
+default_days            = 18250
+default_crl_days        = 18250
+name_opt                = ca_default
+cert_opt                = ca_default
+email_in_dn             = no
+preserve                = no
+policy                  = policy_match
+copy_extensions         = copy
+
+[ CA_client ]
+
+dir                     = $HOME/client
+certs                   = $dir/certs
+crl_dir                 = $dir/crl
+database                = $dir/index.txt
+new_certs_dir           = $dir/newcerts
+certificate             = $dir/ca_cert.pem
+serial                  = $dir/serial
+crlnumber               = $dir/crlnumber
+crl                     = $dir/crl.pem
+private_key             = $dir/ca_key.pem
+x509_extensions         = usr_cert
+crl_extensions          = crl_ext
+default_md              = sha384
+default_days            = 18250
+default_crl_days        = 18250
+name_opt                = ca_default
+cert_opt                = ca_default
+email_in_dn             = no
+preserve                = no
+policy                  = policy_match
+copy_extensions         = copy
+
+[ policy_match ]
+
+countryName             = match
+organizationName        = match
+organizationalUnitName  = optional
+commonName              = supplied
+emailAddress            = optional
+
+[ policy_anything ]
+
+countryName             = optional
+organizationName        = optional
+organizationalUnitName  = optional
+commonName              = supplied
+emailAddress            = optional
+
+[ crl_ext ]
+
+authorityKeyIdentifier  = keyid:always,issuer:always
+
+[ usr_cert ]
+
+basicConstraints        = CA:FALSE
+subjectKeyIdentifier    = hash
+authorityKeyIdentifier  = keyid, issuer
+nsComment               = "OpenSSL Generated Certificate"
+
+[ req ]
+
+default_md              = sha384
+default_bits            = 4096
+default_keyfile         = privkey.pem
+default_days            = 3650
+distinguished_name      = req_distinguished_name
+attributes              = req_attributes
+x509_extensions         = v3_CA
+req_extensions          = v3_client
+utf8                    = yes
+string_mask             = utf8only
+distinguished_name      = req_distinguished_name
+attributes              = req_attributes
+
+[ req_distinguished_name ]
+
+countryName                     = Country Name (2 letter code)
+countryName_default             = US
+countryName_min                 = 2
+countryName_max                 = 2
+organizationName                = Organization Name (eg, company)
+organizationName_default        = Constellation
+organizationalUnitName          = Organizational Unit Name (eg, section)
+commonName                      = Common Name (e.g. server FQDN or YOUR name)
+commonName_max                  = 64
+
+[ req_attributes ]
+
+challengePassword               = A challenge password
+challengePassword_min           = 4
+challengePassword_max           = 20
+
+[ v3_CA ]
+
+basicConstraints        = critical, CA:TRUE, pathlen:0
+subjectKeyIdentifier    = hash
+authorityKeyIdentifier  = keyid:always, issuer:always
+keyUsage                = keyCertSign, cRLSign
+nsCertType              = sslCA
+
+[ v3_client ]
+
+basicConstraints        = CA:FALSE
+subjectKeyIdentifier    = hash
+keyUsage                = digitalSignature
+#extendedKeyUsage        = clientAuth
+#nsCertType              = client
+#issuerAltName          = issuer:copy
+
+[ v3_server ]
+
+basicConstraints        = CA:FALSE
+subjectKeyIdentifier    = hash
+keyUsage                = digitalSignature
+#extendedKeyUsage        = serverAuth
+#nsCertType              = server
+#issuerAltName          = issuer:copy
