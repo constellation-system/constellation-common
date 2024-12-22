@@ -74,6 +74,29 @@ impl Notify {
 
         let out = *guard;
 
+        *guard = false;
+
+        Ok(out)
+    }
+
+    pub fn wait_timeout_no_reset(
+        &self,
+        timeout: Duration
+    ) -> Result<bool, MutexPoison> {
+        let mut guard = self.0.flag.lock().map_err(|_| MutexPoison)?;
+        let when = Instant::now() + timeout;
+
+        while when < Instant::now() && !*guard {
+            guard = self
+                .0
+                .cond
+                .wait_timeout(guard, timeout)
+                .map_err(|_| MutexPoison)?
+                .0;
+        }
+
+        let out = *guard;
+
         Ok(out)
     }
 
@@ -81,6 +104,18 @@ impl Notify {
     ///
     /// This will filter spurious wakeups.
     pub fn wait(&self) -> Result<(), MutexPoison> {
+        let mut guard = self.0.flag.lock().map_err(|_| MutexPoison)?;
+
+        while !*guard {
+            guard = self.0.cond.wait(guard).map_err(|_| MutexPoison)?;
+        }
+
+        *guard = false;
+
+        Ok(())
+    }
+
+    pub fn wait_no_reset(&self) -> Result<(), MutexPoison> {
         let mut guard = self.0.flag.lock().map_err(|_| MutexPoison)?;
 
         while !*guard {
