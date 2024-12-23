@@ -19,8 +19,8 @@
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
-use std::time::Instant;
 use std::time::Duration;
+use std::time::Instant;
 
 use crate::error::MutexPoison;
 
