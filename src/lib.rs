@@ -46,8 +46,8 @@ pub mod hashid;
 pub mod net;
 pub mod retry;
 pub mod sched;
-// pub mod schema;
 pub mod shutdown;
+pub mod sync;
 // pub mod version;
 
 #[cfg(test)]

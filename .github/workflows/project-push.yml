@@ -176,7 +176,7 @@ jobs:
 
       - name: Check branches for constellation dependencies
         run: |
-          if `cargo tree | grep github.com/constellation-system | sed  's/[^?]*?//' | sed 's/#.*//' | sed 's/branch=//' | grep -Evq "^${{ github.ref_name }}$"`; then
+          if `cargo tree | grep github.com/constellation-system | sed  's/[^?]*?//' | sed 's/#.*//' | sed 's/branch=//' | sed "s:%2[fF]:/:" | grep -Evq "^${{ github.ref_name }}$"`; then
             echo "Constellation depnedencies not on ${{ github.ref_name }} branch:"
             cargo tree | grep github.com/constellation-system
             exit 1
