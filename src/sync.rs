@@ -126,6 +126,13 @@ impl Notify {
     }
 }
 
+impl Default for Notify {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 use std::thread::sleep;
 #[cfg(test)]
