@@ -48,8 +48,10 @@ pub trait SharedMsgs<Party, Msg> {
     /// well as the time at which to check again for new messages.
     fn msgs(
         &mut self
-    ) -> Result<(Option<Vec<(Vec<Party>, Vec<Msg>)>>, Option<Instant>),
-                Self::MsgsError>;
+    ) -> Result<
+        (Option<Vec<(Vec<Party>, Vec<Msg>)>>, Option<Instant>),
+        Self::MsgsError
+    >;
 }
 
 /// Common supertrait for socket-like objects.
