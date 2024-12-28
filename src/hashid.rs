@@ -61,6 +61,11 @@ pub trait HashAlgo {
         bytes: &[u8]
     ) -> Self::HashID;
 
+    #[inline]
+    fn null_hash(&self) -> Self::HashID {
+        self.hash_bytes(&[])
+    }
+
     fn hashid<T, Codec>(
         &self,
         codec: &mut Codec,
