@@ -32,9 +32,9 @@ exclude = [
 ]
 
 [features]
-default = ["gssapi","log","openssl","unix"]
+default = ["gssapi", "log", "openssl", "unix"]
 log = ["dep:log"]
-gssapi = ["dep:libgssapi"]
+gssapi = ["dep:libgssapi", "dep:libgssapi-sys"]
 openssl = ["dep:openssl"]
 openssl-vendored = ["openssl/vendored"]
 unix = []
@@ -43,7 +43,9 @@ unix = []
 asn1rs = { version = "0.3" }
 blake2 = { version = "0.10" }
 digest = { version = "0.10" }
-libgssapi = { version = "0.8", optional = true }
+# ISSUE 17: versions pinned due to compiler version pinning
+libgssapi = { version = "=0.8.1", optional = true }
+libgssapi-sys = { version = "=0.3.2", optional = true }
 log = { version = "0.4", optional = true }
 openssl = { version = "0.10", optional = true }
 rand = { version = "0.8" }

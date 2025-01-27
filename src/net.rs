@@ -29,12 +29,30 @@ use std::net::SocketAddr;
 use std::net::SocketAddrV4;
 use std::net::SocketAddrV6;
 use std::str::FromStr;
+use std::time::Instant;
 
 use serde::Deserialize;
 use serde::Serialize;
 use serde::Serializer;
 
 use crate::error::ScopedError;
+
+/// Trait for sources of messages to be sent over a shared channel.
+pub trait SharedMsgs<Party, Msg> {
+    /// Type of errors that can occur when collecting messages.
+    type MsgsError: Display + ScopedError;
+
+    /// Collect and report outbound messages.
+    ///
+    /// This will provide the outbound messages, if there are any, as
+    /// well as the time at which to check again for new messages.
+    fn msgs(
+        &mut self
+    ) -> Result<
+        (Option<Vec<(Vec<Party>, Vec<Msg>)>>, Option<Instant>),
+        Self::MsgsError
+    >;
+}
 
 /// Common supertrait for socket-like objects.
 ///

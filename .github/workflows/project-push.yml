@@ -1,0 +1,183 @@
+name: Project branch builder
+
+run-name: Push to ${{ github.ref_name }} by ${{ github.actor }}
+
+env:
+  LINT_FLAGS: -W clippy::all -W clippy::pedantic -W clippy::cargo
+  RUST_TOOLCHAIN: 'nightly-2024-07-21'
+  LLVM_VERSION: 18
+
+on:
+  push:
+    branches:
+      - 'project/*'
+
+permissions: {}
+
+jobs:
+  format:
+    name: Format check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Cache
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-rust-crates
+        with:
+          path: ~/.cargo
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/Cargo.lock') }}
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+
+      - name: Setup toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          override: true
+          components: rustfmt
+
+      - name: Install GSSAPI development packages
+        uses: ConorMacBride/install-package@v1
+        with:
+          apt: libkrb5-dev
+
+      - name: Check formatting
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check --verbose
+
+  check:
+    name: Compile warnings
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Cache
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-rust-crates
+        with:
+          path: ~/.cargo
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/Cargo.lock') }}
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+
+      - name: Setup toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          override: true
+
+      - name: Install GSSAPI development packages
+        uses: ConorMacBride/install-package@v1
+        with:
+          apt: libkrb5-dev
+
+      - name: Check for compile warnings
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+
+  lint:
+    name: Lint check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Cache
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-rust-crates
+        with:
+          path: ~/.cargo
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/Cargo.lock') }}
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+
+      - name: Setup toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          override: true
+          components: clippy
+
+      - name: Install GSSAPI development packages
+        uses: ConorMacBride/install-package@v1
+        with:
+          apt: libkrb5-dev
+
+      - name: Lint check
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: -- ${{ env.LINT_PARAMS }}
+
+  license:
+    name: License header check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Cache
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-rust-crates
+        with:
+          path: ~/.cargo
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/Cargo.lock') }}
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+
+      - name: Check license header
+        uses: apache/skywalking-eyes/header@main
+
+  dep-branches:
+    name: Constellation dependency branch check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Cache
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-rust-crates
+        with:
+          path: ~/.cargo
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/Cargo.lock') }}
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+
+      - name: Check branches for constellation dependencies
+        run: |
+          if `cargo tree | grep github.com/constellation-system | sed  's/[^?]*?//' | sed 's/#.*//' | sed 's/branch=//' | sed "s:%2[fF]:/:" | grep -Evq "^${{ github.ref_name }}$"`; then
+            echo "Constellation depnedencies not on ${{ github.ref_name }} branch:"
+            cargo tree | grep github.com/constellation-system
+            exit 1
+          fi

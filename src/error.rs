@@ -145,7 +145,14 @@ pub enum ErrorScope {
     Retryable
 }
 
+#[derive(Debug)]
 pub struct MutexPoison;
+
+#[derive(Debug)]
+pub enum WithMutexPoison<Error> {
+    Inner { error: Error },
+    MutexPoison
+}
 
 impl Ord for ErrorScope {
     fn cmp(
@@ -237,6 +244,19 @@ impl ScopedError for MutexPoison {
     }
 }
 
+impl<Error> ScopedError for WithMutexPoison<Error>
+where
+    Error: ScopedError
+{
+    #[inline]
+    fn scope(&self) -> ErrorScope {
+        match self {
+            WithMutexPoison::Inner { error } => error.scope(),
+            WithMutexPoison::MutexPoison => ErrorScope::Unrecoverable
+        }
+    }
+}
+
 #[cfg(feature = "openssl")]
 impl<S> ScopedError for HandshakeError<S> {
     fn scope(&self) -> ErrorScope {
@@ -254,5 +274,20 @@ impl Display for MutexPoison {
         f: &mut Formatter<'_>
     ) -> Result<(), Error> {
         write!(f, "mutex poisoned")
+    }
+}
+
+impl<Err> Display for WithMutexPoison<Err>
+where
+    Err: Display
+{
+    fn fmt(
+        &self,
+        f: &mut Formatter<'_>
+    ) -> Result<(), Error> {
+        match self {
+            WithMutexPoison::Inner { error } => error.fmt(f),
+            WithMutexPoison::MutexPoison => write!(f, "mutex poisoned")
+        }
     }
 }
