@@ -63,7 +63,7 @@ impl Notify {
         let mut guard = self.0.flag.lock().map_err(|_| MutexPoison)?;
         let when = Instant::now() + timeout;
 
-        while when < Instant::now() && !*guard {
+        while Instant::now() < when && !*guard {
             guard = self
                 .0
                 .cond
@@ -86,7 +86,7 @@ impl Notify {
         let mut guard = self.0.flag.lock().map_err(|_| MutexPoison)?;
         let when = Instant::now() + timeout;
 
-        while when < Instant::now() && !*guard {
+        while Instant::now() < when && !*guard {
             guard = self
                 .0
                 .cond
