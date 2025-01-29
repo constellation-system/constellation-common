@@ -37,7 +37,8 @@
 
 #[allow(clippy::all)]
 #[rustfmt::skip]
-// mod generated;
+
+mod generated;
 
 pub mod codec;
 pub mod config;
@@ -49,7 +50,7 @@ pub mod retry;
 pub mod sched;
 pub mod shutdown;
 pub mod sync;
-// pub mod version;
+pub mod version;
 
 #[cfg(test)]
 use std::sync::Once;

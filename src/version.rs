@@ -20,6 +20,7 @@ use std::cmp::Ordering;
 use std::fmt::Display;
 use std::fmt::Error;
 use std::fmt::Formatter;
+use std::string::ToString;
 
 use crate::codec::per::PERCodec;
 pub use crate::generated::version::Version;
@@ -31,10 +32,92 @@ pub use crate::generated::version::VersionRangeElemSub;
 
 pub type VersionPERCodec = PERCodec<Version, 32>;
 
+/// Suffixes attached to a version, indicating the stage of the
+/// development cycle.
+///
+/// These are specific informational tags that indicate position in
+/// the development cycle leading up to a general release.  A suffix
+/// is _not_ present on a general release version.
+#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum VersionSuffix {
+    /// In-development state.
+    ///
+    /// This represents the development run-up towards the stated
+    /// version.
+    Development,
+    /// Alpha-quality pre-release state.
+    ///
+    /// This represents an initial pre-release state that is intended
+    /// for a small, trusted user base.  It is likely known to be
+    /// relatively untested and likely having numerous issues.
+    Alpha,
+    /// Beta-quality pre-release state.
+    ///
+    /// This represents an pre-release state that is intended for a
+    /// larger, but still technically-savvy user base, and not
+    /// intended for critical or trusted application spaces.
+    Beta,
+    /// Pre-release state under active evaluation for release.
+    ///
+    /// This represents a pre-release state that is reasonably
+    /// believed to be suitable for general release, and is actively
+    /// undergoing release certification.
+    ReleaseCandidate {
+        /// Iteration of the release candidate.
+        num: usize
+    }
+}
+
+/// Full application version.
+///
+/// This is a full version, intended for use by applications.  It
+/// includes additional information not meant to be sent over a
+/// network or compared for compatibility determinations.
+pub struct FullVersion {
+    /// Informational prefix, added to indicate special status or options.
+    ///
+    /// This is not used in most cases.
+    prefix: Option<&'static str>,
+    /// Core version number triple.
+    version: Version,
+    /// Indicator of the position in the releases cycle.
+    suffix: Option<VersionSuffix>
+}
+
+impl FullVersion {
+    #[inline]
+    pub const fn new(
+        prefix: Option<&'static str>,
+        version: Version,
+        suffix: Option<VersionSuffix>
+    ) -> Self {
+        FullVersion {
+            prefix: prefix,
+            version: version,
+            suffix: suffix
+        }
+    }
+
+    #[inline]
+    pub const fn prefix(&self) -> Option<&'static str> {
+        self.prefix
+    }
+
+    #[inline]
+    pub const fn core_version(&self) -> &Version {
+        &self.version
+    }
+
+    #[inline]
+    pub const fn suffix(&self) -> Option<&VersionSuffix> {
+        self.suffix.as_ref()
+    }
+}
+
 impl Version {
     /// Create a new `Version` from the version components.
     #[inline]
-    pub fn new(
+    pub const fn new(
         major: u16,
         minor: u16,
         sub: u16
@@ -48,19 +131,19 @@ impl Version {
 
     /// Get the major version number.
     #[inline]
-    pub fn major(&self) -> u16 {
+    pub const fn major(&self) -> u16 {
         self.major
     }
 
     /// Get the minor version number.
     #[inline]
-    pub fn minor(&self) -> u16 {
+    pub const fn minor(&self) -> u16 {
         self.minor
     }
 
     /// Get the sub-minor version number.
     #[inline]
-    pub fn sub(&self) -> u16 {
+    pub const fn sub(&self) -> u16 {
         self.sub
     }
 }
@@ -166,6 +249,25 @@ impl VersionRangeElem {
     }
 }
 
+impl Display for FullVersion {
+    fn fmt(
+        &self,
+        f: &mut Formatter
+    ) -> Result<(), Error> {
+        if let Some(prefix) = self.prefix() {
+            write!(f, "{} ", prefix)?;
+        }
+
+        write!(f, "{}", self.core_version())?;
+
+        if let Some(suffix) = self.suffix() {
+            write!(f, "-{} ", suffix)?;
+        }
+
+        Ok(())
+    }
+}
+
 impl Display for Version {
     fn fmt(
         &self,
@@ -212,6 +314,20 @@ impl Display for VersionRangeElemSub {
         f: &mut Formatter
     ) -> Result<(), Error> {
         write!(f, "{}.{}.{}", self.major(), self.minor(), self.sub())
+    }
+}
+
+impl Display for VersionSuffix {
+    fn fmt(
+        &self,
+        f: &mut Formatter
+    ) -> Result<(), Error> {
+        match self {
+            VersionSuffix::Development => write!(f, "devel"),
+            VersionSuffix::Alpha => write!(f, "alpha"),
+            VersionSuffix::Beta => write!(f, "beta"),
+            VersionSuffix::ReleaseCandidate { num } => write!(f, "RC{}", num)
+        }
     }
 }
 
@@ -818,6 +934,20 @@ impl Ord for VersionRangeElemSub {
             },
             out => out
         }
+    }
+}
+
+impl From<&'_ FullVersion> for String {
+    #[inline]
+    fn from(val: &FullVersion) -> Self {
+        val.to_string()
+    }
+}
+
+impl From<FullVersion> for String {
+    #[inline]
+    fn from(val: FullVersion) -> String {
+        String::from(&val)
     }
 }
 
