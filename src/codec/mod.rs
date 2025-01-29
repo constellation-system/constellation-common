@@ -23,8 +23,7 @@
 //! and decoding objects for transmission over the network, as opposed
 //! to the [serde] framework.  This is done for several reasons:
 //!
-//! * It allows the exact formats of messages to vary for different
-//!   channels.
+//! * It allows the exact formats of messages to vary for different channels.
 //!
 //! * It allows more precise control over the exact message formats.
 //!
