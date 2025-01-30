@@ -21,6 +21,8 @@ use std::convert::Infallible;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::io::Error;
+use std::io::IoSlice;
+use std::io::IoSliceMut;
 use std::marker::PhantomData;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
@@ -105,6 +107,18 @@ pub trait Sender: Socket {
         buf: &[u8]
     ) -> Result<usize, Error>;
 
+    /// Send the data in `buf` to the counterparty at `Addr`, using
+    /// `IoSlice`.
+    ///
+    /// This returns the number of bytes sent, which should be equal
+    /// to `buf.len()` unless the maximum size is exceeded, or an
+    /// error if one occurs.
+    fn send_to_vectored(
+        &self,
+        addr: &Self::Addr,
+        bufs: &[IoSlice<'_>]
+    ) -> Result<usize, Error>;
+
     /// Ensure all pending packets are sent.
     fn flush(&self) -> Result<(), Error>;
 }
@@ -114,6 +128,8 @@ pub trait Sender: Socket {
 /// This is separate from [Sender], to allow implementations to
 /// spilt into a send and receive half.
 pub trait Receiver: Socket {
+    type MsgCred;
+
     /// Receive a message into `buf`, returning the number of bytes
     /// received and the address of the counterparty that sent the
     /// message.
@@ -128,7 +144,23 @@ pub trait Receiver: Socket {
     fn recv_from(
         &self,
         buf: &mut [u8]
-    ) -> Result<(usize, Self::Addr), Error>;
+    ) -> Result<(usize, Self::Addr, Option<Self::MsgCred>), Error>;
+
+    /// Receive a message into `buf`, returning the number of bytes
+    /// received and the address of the counterparty that sent the
+    /// message.
+    ///
+    /// If the size of the message exceeds the space available in
+    /// `buf`, the remaining bytes will be dropped.
+    ///
+    /// The counterparty address is generally able to be spoofed and
+    /// cannot establish identity, unless the underlying socket
+    /// implementation guarantees it.  See
+    /// [allow_session_addr_creds](Socket::allow_session_addr_creds).
+    fn recv_from_vectored(
+        &self,
+        bufs: &mut [IoSliceMut<'_>]
+    ) -> Result<(usize, Self::Addr, Option<Self::MsgCred>), Error>;
 
     /// Examine a pending message without consuming it.
     ///
