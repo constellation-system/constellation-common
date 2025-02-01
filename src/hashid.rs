@@ -36,7 +36,7 @@ use skein::consts::U64;
 use skein::Skein512;
 use whirlpool::Whirlpool;
 
-use crate::codec::DatagramCodec;
+use crate::codec::Codec;
 
 /// Trait for IDs generated from hashing a more complex type.
 pub trait HashID: Sized {
@@ -66,13 +66,13 @@ pub trait HashAlgo {
         self.hash_bytes(&[])
     }
 
-    fn hashid<T, Codec>(
+    fn hashid<T, C>(
         &self,
-        codec: &mut Codec,
+        codec: &mut C,
         val: &T
-    ) -> Result<Self::HashID, Codec::EncodeError>
+    ) -> Result<Self::HashID, C::EncodeError>
     where
-        Codec: DatagramCodec<T> {
+        C: Codec<T> {
         let encoded = codec.encode_to_vec(val)?;
 
         Ok(self.hash_bytes(&encoded))
