@@ -27,6 +27,10 @@
 //! transmission over far-link channels, and in general provides a
 //! very dense encoding format.
 use std::convert::Infallible;
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::io::Read;
+use std::io::Write;
 use std::marker::PhantomData;
 
 use asn1rs::io::per::err::Error;
@@ -38,6 +42,8 @@ use asn1rs::syn::io::UperWriter;
 use asn1rs::syn::Readable;
 use asn1rs::syn::Writable;
 
+use crate::codec::BytestreamCodec;
+use crate::codec::Codec;
 use crate::codec::DatagramCodec;
 
 /// Sub-trait of [DatagramCodec] for things that can be encoded using
@@ -77,6 +83,11 @@ pub struct PERCodec<T: Readable + Writable, const MAX_BITS: usize>(
     PhantomData<T>
 );
 
+pub enum PERCodecStreamError {
+    Codec { err: Error },
+    IO { err: std::io::Error }
+}
+
 impl<T, const MAX_BITS: usize> Clone for PERCodec<T, MAX_BITS>
 where
     T: Readable + Writable
@@ -87,7 +98,7 @@ where
     }
 }
 
-impl<T, const MAX_BITS: usize> DatagramCodec<T> for PERCodec<T, MAX_BITS>
+impl<T, const MAX_BITS: usize> Codec<T> for PERCodec<T, MAX_BITS>
 where
     T: Readable + Writable
 {
@@ -95,8 +106,6 @@ where
     type DecodeError = Error;
     type EncodeError = Error;
     type Param = ();
-
-    const MAX_BYTES: usize = ((MAX_BITS - 1) >> 3) + 1;
 
     #[inline]
     fn create(_param: ()) -> Result<Self, Infallible> {
@@ -159,6 +168,72 @@ where
     }
 }
 
+impl<T, const MAX_BITS: usize> BytestreamCodec<T> for PERCodec<T, MAX_BITS>
+where
+    T: Readable + Writable
+{
+    type StreamDecodeError = PERCodecStreamError;
+    type StreamEncodeError = PERCodecStreamError;
+
+    fn encode_to_stream<W>(
+        &mut self,
+        stream: &mut W,
+        val: &T
+    ) -> Result<usize, Self::StreamEncodeError>
+    where
+        W: Write {
+        // XXX eventually, this should just directly encode to the stream.
+        let mut buf = vec![0; Self::MAX_BYTES + 2];
+        let nbytes = self
+            .encode(val, &mut buf[2..Self::MAX_BYTES + 2])
+            .map_err(|err| PERCodecStreamError::Codec { err: err })?;
+
+        buf[0] = (nbytes & 0xff) as u8;
+        buf[1] = ((nbytes >> 1) & 0xff) as u8;
+        buf.truncate(nbytes + 2);
+
+        stream
+            .write_all(&buf)
+            .map_err(|err| PERCodecStreamError::IO { err: err })?;
+
+        Ok(nbytes + 2)
+    }
+
+    fn decode_from_stream<R>(
+        &mut self,
+        stream: &mut R
+    ) -> Result<(T, usize), Self::StreamDecodeError>
+    where
+        R: Read {
+        // XXX eventually, this should just directly decode from the stream.
+        let mut lenbuf = [0; 2];
+
+        stream
+            .read_exact(&mut lenbuf[..])
+            .map_err(|err| PERCodecStreamError::IO { err: err })?;
+
+        let len = (lenbuf[0] as usize) | (lenbuf[1] as usize) << 1;
+        let mut buf = vec![0; len];
+
+        stream
+            .read_exact(&mut buf[..])
+            .map_err(|err| PERCodecStreamError::IO { err: err })?;
+
+        let (val, _) = self
+            .decode(&buf)
+            .map_err(|err| PERCodecStreamError::Codec { err: err })?;
+
+        Ok((val, len + 2))
+    }
+}
+
+impl<T, const MAX_BITS: usize> DatagramCodec<T> for PERCodec<T, MAX_BITS>
+where
+    T: Readable + Writable
+{
+    const MAX_BYTES: usize = ((MAX_BITS - 1) >> 3) + 1;
+}
+
 impl<T, const MAX_BITS: usize> DatagramPERCodec<T> for PERCodec<T, MAX_BITS> where
     T: Readable + Writable
 {
@@ -171,5 +246,17 @@ where
     #[inline]
     fn default() -> Self {
         PERCodec(PhantomData)
+    }
+}
+
+impl Display for PERCodecStreamError {
+    fn fmt(
+        &self,
+        f: &mut Formatter<'_>
+    ) -> Result<(), std::fmt::Error> {
+        match self {
+            PERCodecStreamError::Codec { err } => err.fmt(f),
+            PERCodecStreamError::IO { err } => err.fmt(f)
+        }
     }
 }

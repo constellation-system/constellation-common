@@ -29,14 +29,12 @@
 //!
 //! * It facilitates the use of encoding formats such as ASN.1 PER.
 use std::fmt::Display;
+use std::io::Read;
+use std::io::Write;
 
 pub mod per;
 
-/// Trait for encoding/decoding logic on types to datagrams.
-pub trait DatagramCodec<T>: Sized {
-    /// Maximum message size.
-    const MAX_BYTES: usize;
-
+pub trait Codec<T>: Sized {
     /// Parameter for the [create](DatagramCodec::create) function.
     type Param;
     /// Errors that can occur when creating an instance.
@@ -60,18 +58,10 @@ pub trait DatagramCodec<T>: Sized {
     ) -> Result<usize, Self::EncodeError>;
 
     /// Encode `val` to a newly-allocated [Vec].
-    #[inline]
     fn encode_to_vec(
         &mut self,
         val: &T
-    ) -> Result<Vec<u8>, Self::EncodeError> {
-        let mut out = vec![0; Self::MAX_BYTES];
-        let nbytes = self.encode(val, &mut out)?;
-
-        out.truncate(nbytes);
-
-        Ok(out)
-    }
+    ) -> Result<Vec<u8>, Self::EncodeError>;
 
     /// Decode a message into `buf` and return the number of bytes consumed.
     ///
@@ -81,4 +71,30 @@ pub trait DatagramCodec<T>: Sized {
         &mut self,
         buf: &[u8]
     ) -> Result<(T, usize), Self::DecodeError>;
+}
+
+pub trait BytestreamCodec<T> {
+    type StreamDecodeError: Display;
+    type StreamEncodeError: Display;
+
+    fn encode_to_stream<W>(
+        &mut self,
+        stream: &mut W,
+        val: &T
+    ) -> Result<usize, Self::StreamEncodeError>
+    where
+        W: Write;
+
+    fn decode_from_stream<R>(
+        &mut self,
+        stream: &mut R
+    ) -> Result<(T, usize), Self::StreamDecodeError>
+    where
+        R: Read;
+}
+
+/// Trait for encoding/decoding logic on types to datagrams.
+pub trait DatagramCodec<T>: Codec<T> + Sized {
+    /// Maximum message size.
+    const MAX_BYTES: usize;
 }
