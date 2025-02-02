@@ -20,10 +20,10 @@
 use std::cmp::Ordering;
 use std::convert::Infallible;
 use std::fmt::Display;
-use std::fmt::Error;
 use std::fmt::Formatter;
 use std::io::ErrorKind;
 
+use asn1rs::io::per::err::Error;
 use log::error;
 #[cfg(feature = "openssl")]
 use openssl::ssl::HandshakeError;
@@ -154,6 +154,20 @@ pub enum WithMutexPoison<Error> {
     MutexPoison
 }
 
+/// Errors that can occur when sending a message.
+pub enum CodecStreamError<Codec, IO> {
+    /// Error occurred when encoding or decoding the message.
+    Codec {
+        /// Error while encoding or decoding the message.
+        err: Codec
+    },
+    /// I/O level error occurred.
+    IO {
+        /// Error while writing to the I/O object.
+        err: IO
+    }
+}
+
 impl Ord for ErrorScope {
     fn cmp(
         &self,
@@ -237,10 +251,30 @@ impl ScopedError for Infallible {
     }
 }
 
+impl ScopedError for Error {
+    #[inline]
+    fn scope(&self) -> ErrorScope {
+        ErrorScope::Msg
+    }
+}
+
 impl ScopedError for MutexPoison {
     #[inline]
     fn scope(&self) -> ErrorScope {
         ErrorScope::Unrecoverable
+    }
+}
+
+impl<Codec, IO> ScopedError for CodecStreamError<Codec, IO>
+where
+    IO: ScopedError
+{
+    #[inline]
+    fn scope(&self) -> ErrorScope {
+        match self {
+            CodecStreamError::Codec { .. } => ErrorScope::Msg,
+            CodecStreamError::IO { err } => err.scope()
+        }
     }
 }
 
@@ -272,7 +306,7 @@ impl Display for MutexPoison {
     fn fmt(
         &self,
         f: &mut Formatter<'_>
-    ) -> Result<(), Error> {
+    ) -> Result<(), std::fmt::Error> {
         write!(f, "mutex poisoned")
     }
 }
@@ -284,10 +318,26 @@ where
     fn fmt(
         &self,
         f: &mut Formatter<'_>
-    ) -> Result<(), Error> {
+    ) -> Result<(), std::fmt::Error> {
         match self {
             WithMutexPoison::Inner { error } => error.fmt(f),
             WithMutexPoison::MutexPoison => write!(f, "mutex poisoned")
+        }
+    }
+}
+
+impl<Encode, Write> Display for CodecStreamError<Encode, Write>
+where
+    Encode: Display,
+    Write: Display
+{
+    fn fmt(
+        &self,
+        f: &mut Formatter<'_>
+    ) -> Result<(), std::fmt::Error> {
+        match self {
+            CodecStreamError::Codec { err } => err.fmt(f),
+            CodecStreamError::IO { err } => err.fmt(f)
         }
     }
 }
