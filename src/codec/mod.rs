@@ -34,15 +34,17 @@ use std::io::Write;
 
 pub mod per;
 
+use crate::error::ScopedError;
+
 pub trait Codec<T>: Sized {
     /// Parameter for the [create](DatagramCodec::create) function.
     type Param;
     /// Errors that can occur when creating an instance.
-    type CreateError: Display;
+    type CreateError: Display + ScopedError;
     /// Errors that can occur when encoding.
-    type EncodeError: Display;
+    type EncodeError: Display + ScopedError;
     /// Errors that can occur when decoding.
-    type DecodeError: Display;
+    type DecodeError: Display + ScopedError;
 
     /// Create a new instance of this codec.
     fn create(param: Self::Param) -> Result<Self, Self::CreateError>;
@@ -74,8 +76,8 @@ pub trait Codec<T>: Sized {
 }
 
 pub trait BytestreamCodec<T> {
-    type StreamDecodeError: Display;
-    type StreamEncodeError: Display;
+    type StreamDecodeError: Display + ScopedError;
+    type StreamEncodeError: Display + ScopedError;
 
     fn encode_to_stream<W>(
         &mut self,
