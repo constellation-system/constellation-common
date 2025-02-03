@@ -4,8 +4,8 @@ run-name: Push to ${{ github.ref_name }} by ${{ github.actor }}
 
 env:
   LINT_FLAGS: -W clippy::all -W clippy::pedantic -W clippy::cargo
-  RUST_TOOLCHAIN: 'nightly-2024-07-21'
-  LLVM_VERSION: 18
+  RUST_TOOLCHAIN: 'nightly-2024-11-28'
+  LLVM_VERSION: 19
 
 on:
   push:
