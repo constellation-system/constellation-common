@@ -23,7 +23,7 @@ repository = "https://github.com/constellation-system/constellation-common"
 version = "0.0.0"
 authors = [ "Eric McCorkle <eric.mccorkle@jhuapl.edu>" ]
 edition = "2018"
-rust-version = "1.81"
+rust-version = "1.83"
 license = "AGPL-3.0-only"
 keywords = ["distributed systems"]
 categories = ["network-programming"]
@@ -34,7 +34,7 @@ exclude = [
 [features]
 default = ["gssapi", "log", "openssl", "unix"]
 log = ["dep:log"]
-gssapi = ["dep:libgssapi", "dep:libgssapi-sys"]
+gssapi = ["dep:libgssapi"]
 openssl = ["dep:openssl"]
 openssl-vendored = ["openssl/vendored"]
 unix = []
@@ -43,9 +43,7 @@ unix = []
 asn1rs = { version = "0.3" }
 blake2 = { version = "0.10" }
 digest = { version = "0.10" }
-# ISSUE 17: versions pinned due to compiler version pinning
-libgssapi = { version = "=0.8.1", optional = true }
-libgssapi-sys = { version = "=0.3.2", optional = true }
+libgssapi = { version = "0.8", optional = true }
 log = { version = "0.4", optional = true }
 openssl = { version = "0.10", optional = true }
 rand = { version = "0.8" }
