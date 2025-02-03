@@ -2,10 +2,10 @@ header:
   license:
     spdx-id: AGPL-3.0-only
     copyright-owner: The Johns Hopkins Applied Physics Laboratory LLC
-    copyright-year: 2024
+    copyright-year: 2024-25
     software-name: Constellation
     content: | #
-      Copyright © 2024 The Johns Hopkins Applied Physics Laboratory LLC.
+      Copyright © 2024-25 The Johns Hopkins Applied Physics Laboratory LLC.
 
       This program is free software: you can redistribute it and/or modify
       it under the terms of the GNU Affero General Public License, version
