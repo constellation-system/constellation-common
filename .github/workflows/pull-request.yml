@@ -4,8 +4,8 @@ run-name: Pull request for ${{ github.head_ref }} by ${{ github.actor }}
 
 env:
   LINT_FLAGS: -W clippy::all -W clippy::pedantic -W clippy::cargo
-  RUST_TOOLCHAIN: 'nightly-2024-07-21'
-  LLVM_VERSION: 18
+  RUST_TOOLCHAIN: 'nightly-2024-11-28'
+  LLVM_VERSION: 19
 
 on:
   pull_request:
@@ -261,7 +261,7 @@ jobs:
         uses: ConorMacBride/install-package@v1
         with:
           apt: libkrb5-dev llvm-${{ env.LLVM_VERSION }}
-          brew: llvm@${{ env.LLVM_VERSION }}
+          brew: llvm
 
       - name: Generate test certificates
         run: sh gen_test_certs.sh
@@ -299,14 +299,13 @@ jobs:
       - name: Generate coverage report
         if: matrix.os == 'macos-14'
         run: |
-          /opt/homebrew/bin/brew link llvm@18
-          /opt/homebrew/bin/llvm-profdata merge --sparse target/coverage/*.profraw -o target/coverage/coverage.profdata
+          /opt/homebrew/opt/llvm/bin/llvm-profdata merge --sparse target/coverage/*.profraw -o target/coverage/coverage.profdata
           SRCS=""
           for f in `find src -type f -regex ".*\.rs"`; do SRCS+="$f "; done
           TESTBINS=""
           CRATE_NAME=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]' | cut -f2 -d"/")
           for f in `find target/debug/deps -type f -regex "target/debug/deps/${CRATE_NAME//-/_}\-[0-9a-f]*$"`; do TESTBINS+="$f "; done
-          /opt/homebrew/bin/llvm-cov export --format=lcov --ignore-filename-regex="$HOME/.cargo/*|/rustc/" --instr-profile=target/coverage/coverage.profdata `echo $TESTBINS` `echo $SRCS` > target/coverage/${{ runner.os }}-coverage.lcov
+          /opt/homebrew/opt/llvm/bin/llvm-cov export --format=lcov --ignore-filename-regex="$HOME/.cargo/*|/rustc/" --instr-profile=target/coverage/coverage.profdata `echo $TESTBINS` `echo $SRCS` > target/coverage/${{ runner.os }}-coverage.lcov
 
       - name: Upload coverage data
         uses: actions/upload-artifact@v4

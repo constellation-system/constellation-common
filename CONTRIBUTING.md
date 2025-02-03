@@ -1,11 +1,13 @@
 # Constellation Contribution Guide
 
-Contributions should be made in the form of merge requests on the
-primary Git hosting platform against the `devel` branch or an active
-feature-development branch.  All commits to the working branch in a
-merge request *must* be cryptographically signed by the author using
-the PGP signature feature.  Contributions should never be made
-directly to these branches.
+Contributions should be made in the form of merge requests against the
+`devel` branch or an active `project/*` branch as appropriate.  All
+commits to *any* branch in this repository must be cryptographically
+signed by the author using the PGP signature feature.  Contributions
+cannot generally be made directly to `devel` or any `project/*`
+branch.  These policies are enforced through branch protection rules.
+
+## Authorship Requirements
 
 Contributions *must* be written entirely by a human, or with the
 assistance of one of the following types of programs:
@@ -34,7 +36,8 @@ assistance of one of the following types of programs:
 * `diff`, `merge`, `git`, `patch`, `sed`, `awk`, and similar tools
 
 *Contributions written in whole or in part by any sort of generative
-AI, LLM, or similar method are forbidden.*
+AI, LLM, or similar method are expressly forbidden.  **This
+restriction includes GitHub Copilot.***
 
 In general, if a tool is used that deterministically translates an
 input language into code without interaction with a human, then the
@@ -78,4 +81,5 @@ integrated into the build process.
    language model (LLM), generative AI, Markov chain generator, or
    other method based on extracting statistical properties and/or
    patterns from a large corpus of examples ("training") and
-   subsequently reproducing them *are expressly forbidden*.
+   subsequently reproducing them *are expressly forbidden*.  ***This
+   restriction includes GitHub Copilot.***
