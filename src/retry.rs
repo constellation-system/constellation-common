@@ -136,7 +136,7 @@ pub struct Retry {
 }
 
 /// A return type for non-blocking functions that can indicate a delay.
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum RetryResult<T, R: RetryWhen = Instant> {
     /// An immediate result.
     Success(T),

@@ -129,7 +129,6 @@ where
         Ok(writer.into_bytes_vec())
     }
 
-    #[inline]
     fn decode(
         &mut self,
         buf: &[u8]
