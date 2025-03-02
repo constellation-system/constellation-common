@@ -44,6 +44,7 @@ pub mod codec;
 pub mod config;
 pub mod error;
 pub mod hashid;
+pub mod ids;
 pub mod net;
 pub mod nonblock;
 pub mod retry;
