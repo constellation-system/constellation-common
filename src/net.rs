@@ -39,6 +39,20 @@ use serde::Serializer;
 
 use crate::error::ScopedError;
 
+/// Trait for sources of messages to be sent over a private channel.
+pub trait PrivateMsgs<Msg> {
+    /// Type of errors that can occur when collecting messages.
+    type MsgsError: Display + ScopedError;
+
+    /// Collect and report outbound messages.
+    ///
+    /// This will provide the outbound messages, if there are any, as
+    /// well as the time at which to check again for new messages.
+    fn msgs(
+        &mut self
+    ) -> Result<(Option<Vec<Msg>>, Option<Instant>), Self::MsgsError>;
+}
+
 /// Trait for sources of messages to be sent over a shared channel.
 pub trait SharedMsgs<Party, Msg> {
     /// Type of errors that can occur when collecting messages.
