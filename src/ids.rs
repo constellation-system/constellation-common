@@ -23,6 +23,9 @@
 //! the simplest of these, and is a simple ascending counter.  Other
 //! provide a cryptographically-secure random number stream.
 
+use std::sync::Arc;
+use std::sync::Mutex;
+
 /// Trait for ID generators.
 pub trait IDGen: Iterator
 where Self::Item: Default {
@@ -43,6 +46,12 @@ pub struct AscendingCount {
     curr: u128
 }
 
+pub struct SharedIDGen<Inner>
+where Inner: IDGen,
+      Inner::Item: Default {
+    inner: Arc<Mutex<Inner>>
+}
+
 impl IDGen for AscendingCount {
     type Config = ();
 
@@ -56,6 +65,22 @@ impl IDGen for AscendingCount {
     }
 }
 
+impl<Inner> IDGen for SharedIDGen<Inner>
+where Inner: IDGen,
+      Inner::Item: Default {
+    type Config = Inner::Config;
+
+    #[inline]
+    fn create(
+        config: Self::Config,
+    ) -> Self {
+        SharedIDGen {
+            inner: Arc::new(Mutex::new(Inner::create(config)))
+        }
+    }
+}
+
+
 impl Default for AscendingCount {
     #[inline]
     fn default() -> Self {
@@ -66,11 +91,26 @@ impl Default for AscendingCount {
 impl Iterator for AscendingCount {
     type Item = u128;
 
+    #[inline]
     fn next(&mut self) -> Option<u128> {
         let out = self.curr;
 
         self.curr += 1;
 
         Some(out)
+    }
+}
+
+
+impl<Inner> Iterator for SharedIDGen<Inner>
+where Inner: IDGen,
+      Inner::Item: Default {
+    type Item = Inner::Item;
+
+    #[inline]
+    fn next(&mut self) -> Option<Inner::Item> {
+        self.inner.lock()
+            .map(|mut guard| guard.next())
+            .unwrap_or(None)
     }
 }
