@@ -28,15 +28,14 @@ use std::sync::Mutex;
 
 /// Trait for ID generators.
 pub trait IDGen: Iterator
-where Self::Item: Default {
+where
+    Self::Item: Default {
     /// Configuration type for this `IDGen`.
     type Config: Default;
 
     /// Create an instance of the `IDGen` from a configuration and a
     /// current ID.
-    fn create(
-        config: Self::Config,
-    ) -> Self;
+    fn create(config: Self::Config) -> Self;
 }
 
 /// Ascending count ID stream.
@@ -47,8 +46,9 @@ pub struct AscendingCount {
 }
 
 pub struct SharedIDGen<Inner>
-where Inner: IDGen,
-      Inner::Item: Default {
+where
+    Inner: IDGen,
+    Inner::Item: Default {
     inner: Arc<Mutex<Inner>>
 }
 
@@ -56,9 +56,7 @@ impl IDGen for AscendingCount {
     type Config = ();
 
     #[inline]
-    fn create(
-        _config: Self::Config,
-    ) -> Self {
+    fn create(_config: Self::Config) -> Self {
         AscendingCount {
             curr: Self::Item::default()
         }
@@ -66,20 +64,19 @@ impl IDGen for AscendingCount {
 }
 
 impl<Inner> IDGen for SharedIDGen<Inner>
-where Inner: IDGen,
-      Inner::Item: Default {
+where
+    Inner: IDGen,
+    Inner::Item: Default
+{
     type Config = Inner::Config;
 
     #[inline]
-    fn create(
-        config: Self::Config,
-    ) -> Self {
+    fn create(config: Self::Config) -> Self {
         SharedIDGen {
             inner: Arc::new(Mutex::new(Inner::create(config)))
         }
     }
 }
-
 
 impl Default for AscendingCount {
     #[inline]
@@ -101,15 +98,17 @@ impl Iterator for AscendingCount {
     }
 }
 
-
 impl<Inner> Iterator for SharedIDGen<Inner>
-where Inner: IDGen,
-      Inner::Item: Default {
+where
+    Inner: IDGen,
+    Inner::Item: Default
+{
     type Item = Inner::Item;
 
     #[inline]
     fn next(&mut self) -> Option<Inner::Item> {
-        self.inner.lock()
+        self.inner
+            .lock()
             .map(|mut guard| guard.next())
             .unwrap_or(None)
     }
