@@ -23,13 +23,12 @@
 //! the simplest of these, and is a simple ascending counter.  Other
 //! provide a cryptographically-secure random number stream.
 
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 /// Trait for ID generators.
-pub trait IDGen: Iterator
-where
-    Self::Item: Default {
+pub trait IDGen: Iterator {
     /// Configuration type for this `IDGen`.
     type Config: Default;
 
@@ -40,8 +39,13 @@ where
 
 /// Ascending count ID stream.
 ///
-/// This generates a
-pub struct AscendingCount {
+/// This generates a stream of objects obtained from the [From]
+/// instance of a monotonically-ascending count of `u128`s.
+#[derive(Clone)]
+pub struct AscendingCount<T>
+where
+    T: From<u128> {
+    t: PhantomData<T>,
     curr: u128
 }
 
@@ -52,14 +56,15 @@ where
     inner: Arc<Mutex<Inner>>
 }
 
-impl IDGen for AscendingCount {
+impl<T> IDGen for AscendingCount<T>
+where
+    T: From<u128>
+{
     type Config = ();
 
     #[inline]
     fn create(_config: Self::Config) -> Self {
-        AscendingCount {
-            curr: Self::Item::default()
-        }
+        AscendingCount::default()
     }
 }
 
@@ -78,19 +83,28 @@ where
     }
 }
 
-impl Default for AscendingCount {
+impl<T> Default for AscendingCount<T>
+where
+    T: From<u128>
+{
     #[inline]
     fn default() -> Self {
-        AscendingCount { curr: 0 }
+        AscendingCount {
+            t: PhantomData,
+            curr: 0
+        }
     }
 }
 
-impl Iterator for AscendingCount {
-    type Item = u128;
+impl<T> Iterator for AscendingCount<T>
+where
+    T: From<u128>
+{
+    type Item = T;
 
     #[inline]
-    fn next(&mut self) -> Option<u128> {
-        let out = self.curr;
+    fn next(&mut self) -> Option<T> {
+        let out = T::from(self.curr);
 
         self.curr += 1;
 

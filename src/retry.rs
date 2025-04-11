@@ -162,6 +162,18 @@ impl Default for Retry {
 }
 
 impl Retry {
+    /// Default `Retry` parameters for normal terrestrial networks.
+    pub const TERRESTRIAL_NETWORK_DEFAULT: Retry = Retry {
+        factor: 100000,
+        exp_base: 2.0,
+        exp_factor: 1.0,
+        exp_rounds_cap: 20,
+        linear_factor: 0.0,
+        linear_rounds_cap: None,
+        addend: 0,
+        max_random: 100000
+    };
+
     /// Create a new `Retry` from its components.
     ///
     /// The arguments of this function correspond to similarly-named
