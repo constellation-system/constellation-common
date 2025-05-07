@@ -23,6 +23,8 @@ use std::convert::TryInto;
 use std::fmt::Display;
 use std::fmt::Error;
 use std::fmt::Formatter;
+use std::iter::empty;
+use std::iter::once;
 
 use blake2::Blake2b512;
 use digest::Digest;
@@ -43,6 +45,12 @@ pub trait HashID: Sized {
     /// Get the name of the hash function used for this ID.
     fn name(&self) -> &str;
 
+    /// Get the length of the hash.
+    #[inline]
+    fn hash_len(&self) -> usize {
+        self.bytes().len()
+    }
+
     /// Get the bytes of the hashed value.
     fn bytes(&self) -> &[u8];
 }
@@ -51,19 +59,23 @@ pub trait HashID: Sized {
 pub trait HashAlgo {
     type HashID: HashID;
 
+    fn hash_len(&self) -> usize;
+
     fn wrap_hashed_bytes(
         &self,
         bytes: &[u8]
     ) -> Result<Self::HashID, TryFromSliceError>;
 
-    fn hash_bytes(
+    fn hash_bytes<'a, I>(
         &self,
-        bytes: &[u8]
-    ) -> Self::HashID;
+        bytes: I
+    ) -> Self::HashID
+    where
+        I: Iterator<Item = &'a [u8]>;
 
     #[inline]
     fn null_hash(&self) -> Self::HashID {
-        self.hash_bytes(&[])
+        self.hash_bytes(empty())
     }
 
     fn hashid<T, C>(
@@ -75,7 +87,7 @@ pub trait HashAlgo {
         C: Codec<T> {
         let encoded = codec.encode_to_vec(val)?;
 
-        Ok(self.hash_bytes(&encoded))
+        Ok(self.hash_bytes(once(&encoded[..])))
     }
 }
 
@@ -182,6 +194,11 @@ impl HashAlgo for RipeMD160Algo {
     type HashID = RipeMD160ID;
 
     #[inline]
+    fn hash_len(&self) -> usize {
+        20
+    }
+
+    #[inline]
     fn wrap_hashed_bytes(
         &self,
         bytes: &[u8]
@@ -191,13 +208,17 @@ impl HashAlgo for RipeMD160Algo {
         Ok(RipeMD160ID { id: id })
     }
 
-    fn hash_bytes(
+    fn hash_bytes<'a, I>(
         &self,
-        bytes: &[u8]
-    ) -> Self::HashID {
+        bytes: I
+    ) -> Self::HashID
+    where
+        I: Iterator<Item = &'a [u8]> {
         let mut hasher = Ripemd160::default();
 
-        hasher.update(bytes);
+        for data in bytes {
+            hasher.update(data);
+        }
 
         let hashed = hasher.finalize();
         let mut id = [0; RipeMD160ID::HASH_LEN];
@@ -209,7 +230,7 @@ impl HashAlgo for RipeMD160Algo {
 }
 
 impl RipeMD160ID {
-    const HASH_LEN: usize = 160 / 8;
+    pub const HASH_LEN: usize = 160 / 8;
 }
 
 impl HashID for RipeMD160ID {
@@ -243,6 +264,11 @@ impl HashAlgo for Blake2bAlgo {
     type HashID = Blake2bID;
 
     #[inline]
+    fn hash_len(&self) -> usize {
+        64
+    }
+
+    #[inline]
     fn wrap_hashed_bytes(
         &self,
         bytes: &[u8]
@@ -252,13 +278,17 @@ impl HashAlgo for Blake2bAlgo {
         Ok(Blake2bID { id: id })
     }
 
-    fn hash_bytes(
+    fn hash_bytes<'a, I>(
         &self,
-        bytes: &[u8]
-    ) -> Self::HashID {
+        bytes: I
+    ) -> Self::HashID
+    where
+        I: Iterator<Item = &'a [u8]> {
         let mut hasher = Blake2b512::default();
 
-        hasher.update(bytes);
+        for data in bytes {
+            hasher.update(data);
+        }
 
         let hashed = hasher.finalize();
         let mut id = [0; Blake2bID::HASH_LEN];
@@ -270,7 +300,7 @@ impl HashAlgo for Blake2bAlgo {
 }
 
 impl Blake2bID {
-    const HASH_LEN: usize = 512 / 8;
+    pub const HASH_LEN: usize = 512 / 8;
 }
 
 impl HashID for Blake2bID {
@@ -304,6 +334,11 @@ impl HashAlgo for SHA3Algo {
     type HashID = SHA3ID;
 
     #[inline]
+    fn hash_len(&self) -> usize {
+        64
+    }
+
+    #[inline]
     fn wrap_hashed_bytes(
         &self,
         bytes: &[u8]
@@ -313,13 +348,17 @@ impl HashAlgo for SHA3Algo {
         Ok(SHA3ID { id: id })
     }
 
-    fn hash_bytes(
+    fn hash_bytes<'a, I>(
         &self,
-        bytes: &[u8]
-    ) -> Self::HashID {
+        bytes: I
+    ) -> Self::HashID
+    where
+        I: Iterator<Item = &'a [u8]> {
         let mut hasher = Sha3_512::default();
 
-        hasher.update(bytes);
+        for data in bytes {
+            hasher.update(data);
+        }
 
         let hashed = hasher.finalize();
         let mut id = [0; SHA3ID::HASH_LEN];
@@ -331,7 +370,7 @@ impl HashAlgo for SHA3Algo {
 }
 
 impl SHA3ID {
-    const HASH_LEN: usize = 512 / 8;
+    pub const HASH_LEN: usize = 512 / 8;
 }
 
 impl HashID for SHA3ID {
@@ -365,6 +404,11 @@ impl HashAlgo for SHA384Algo {
     type HashID = SHA384ID;
 
     #[inline]
+    fn hash_len(&self) -> usize {
+        48
+    }
+
+    #[inline]
     fn wrap_hashed_bytes(
         &self,
         bytes: &[u8]
@@ -374,13 +418,17 @@ impl HashAlgo for SHA384Algo {
         Ok(SHA384ID { id: id })
     }
 
-    fn hash_bytes(
+    fn hash_bytes<'a, I>(
         &self,
-        bytes: &[u8]
-    ) -> Self::HashID {
+        bytes: I
+    ) -> Self::HashID
+    where
+        I: Iterator<Item = &'a [u8]> {
         let mut hasher = Sha384::default();
 
-        hasher.update(bytes);
+        for data in bytes {
+            hasher.update(data);
+        }
 
         let hashed = hasher.finalize();
         let mut id = [0; SHA384ID::HASH_LEN];
@@ -392,7 +440,7 @@ impl HashAlgo for SHA384Algo {
 }
 
 impl SHA384ID {
-    const HASH_LEN: usize = 384 / 8;
+    pub const HASH_LEN: usize = 384 / 8;
 }
 
 impl HashID for SHA384ID {
@@ -426,6 +474,11 @@ impl HashAlgo for SkeinAlgo {
     type HashID = SkeinID;
 
     #[inline]
+    fn hash_len(&self) -> usize {
+        64
+    }
+
+    #[inline]
     fn wrap_hashed_bytes(
         &self,
         bytes: &[u8]
@@ -435,13 +488,17 @@ impl HashAlgo for SkeinAlgo {
         Ok(SkeinID { id: id })
     }
 
-    fn hash_bytes(
+    fn hash_bytes<'a, I>(
         &self,
-        bytes: &[u8]
-    ) -> Self::HashID {
+        bytes: I
+    ) -> Self::HashID
+    where
+        I: Iterator<Item = &'a [u8]> {
         let mut hasher = Skein512::<U64>::new();
 
-        hasher.update(bytes);
+        for data in bytes {
+            hasher.update(data);
+        }
 
         let hashed = hasher.finalize();
         let mut id = [0; SkeinID::HASH_LEN];
@@ -453,7 +510,7 @@ impl HashAlgo for SkeinAlgo {
 }
 
 impl SkeinID {
-    const HASH_LEN: usize = 512 / 8;
+    pub const HASH_LEN: usize = 512 / 8;
 }
 
 impl HashID for SkeinID {
@@ -487,6 +544,11 @@ impl HashAlgo for WhirlpoolAlgo {
     type HashID = WhirlpoolID;
 
     #[inline]
+    fn hash_len(&self) -> usize {
+        64
+    }
+
+    #[inline]
     fn wrap_hashed_bytes(
         &self,
         bytes: &[u8]
@@ -496,13 +558,17 @@ impl HashAlgo for WhirlpoolAlgo {
         Ok(WhirlpoolID { id: id })
     }
 
-    fn hash_bytes(
+    fn hash_bytes<'a, I>(
         &self,
-        bytes: &[u8]
-    ) -> Self::HashID {
+        bytes: I
+    ) -> Self::HashID
+    where
+        I: Iterator<Item = &'a [u8]> {
         let mut hasher = Whirlpool::default();
 
-        hasher.update(bytes);
+        for data in bytes {
+            hasher.update(data);
+        }
 
         let hashed = hasher.finalize();
         let mut id = [0; WhirlpoolID::HASH_LEN];
@@ -514,7 +580,7 @@ impl HashAlgo for WhirlpoolAlgo {
 }
 
 impl WhirlpoolID {
-    const HASH_LEN: usize = 512 / 8;
+    pub const HASH_LEN: usize = 512 / 8;
 }
 
 impl HashID for WhirlpoolID {
@@ -606,6 +672,18 @@ impl HashAlgo for CompoundHashAlgo {
     type HashID = CompoundHashID;
 
     #[inline]
+    fn hash_len(&self) -> usize {
+        match self {
+            CompoundHashAlgo::Blake2b { blake2b } => blake2b.hash_len(),
+            CompoundHashAlgo::RipeMD160 { ripemd160 } => ripemd160.hash_len(),
+            CompoundHashAlgo::SHA3 { sha3 } => sha3.hash_len(),
+            CompoundHashAlgo::SHA384 { sha384 } => sha384.hash_len(),
+            CompoundHashAlgo::Skein { skein } => skein.hash_len(),
+            CompoundHashAlgo::Whirlpool { whirlpool } => whirlpool.hash_len()
+        }
+    }
+
+    #[inline]
     fn wrap_hashed_bytes(
         &self,
         bytes: &[u8]
@@ -632,10 +710,12 @@ impl HashAlgo for CompoundHashAlgo {
         }
     }
 
-    fn hash_bytes(
+    fn hash_bytes<'a, I>(
         &self,
-        bytes: &[u8]
-    ) -> Self::HashID {
+        bytes: I
+    ) -> Self::HashID
+    where
+        I: Iterator<Item = &'a [u8]> {
         match self {
             CompoundHashAlgo::Blake2b { blake2b } => CompoundHashID::Blake2b {
                 blake2b: blake2b.hash_bytes(bytes)

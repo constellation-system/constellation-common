@@ -107,17 +107,15 @@ where
     }
 
     #[inline]
-    fn encode(
-        &mut self,
-        val: &T,
-        buf: &mut [u8]
-    ) -> Result<usize, Self::EncodeError> {
-        let vec = self.encode_to_vec(val)?;
-        let len = vec.len();
-
-        buf[..len].copy_from_slice(&vec);
-
-        Ok(len)
+    fn buf_size(
+        &self,
+        _val: &T
+    ) -> usize {
+        if MAX_BITS > 0 {
+            ((MAX_BITS - 1) / 8) + 1
+        } else {
+            0
+        }
     }
 
     #[inline]
@@ -130,6 +128,20 @@ where
         self.encode_to_writer(val, &mut writer)?;
 
         Ok(writer.into_bytes_vec())
+    }
+
+    #[inline]
+    fn encode(
+        &mut self,
+        val: &T,
+        buf: &mut [u8]
+    ) -> Result<usize, Self::EncodeError> {
+        let vec = self.encode_to_vec(val)?;
+        let len = vec.len();
+
+        buf[..len].copy_from_slice(&vec);
+
+        Ok(len)
     }
 
     fn decode(

@@ -26,3 +26,93 @@
 pub mod authn;
 pub mod pki;
 // pub mod signing;
+
+use std::convert::TryFrom;
+
+use serde::Deserialize;
+use serde::Serialize;
+
+use crate::version::BadVersionRangeString;
+use crate::version::BadVersionString;
+use crate::version::Version;
+use crate::version::VersionRange;
+
+#[derive(Clone, Debug, Deserialize, PartialEq, PartialOrd, Serialize)]
+#[serde(rename = "version")]
+#[serde(rename_all = "kebab-case")]
+#[serde(try_from = "&str")]
+#[serde(into = "String")]
+pub struct VersionConfig(Version);
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename = "version-range")]
+#[serde(rename_all = "kebab-case")]
+#[serde(try_from = "&str")]
+#[serde(into = "String")]
+pub struct VersionRangeConfig(VersionRange);
+
+impl From<VersionConfig> for Version {
+    #[inline]
+    fn from(val: VersionConfig) -> Version {
+        val.0
+    }
+}
+
+impl From<Version> for VersionConfig {
+    #[inline]
+    fn from(val: Version) -> VersionConfig {
+        VersionConfig(val)
+    }
+}
+
+impl From<VersionRangeConfig> for VersionRange {
+    #[inline]
+    fn from(val: VersionRangeConfig) -> VersionRange {
+        val.0
+    }
+}
+
+impl From<VersionRange> for VersionRangeConfig {
+    #[inline]
+    fn from(val: VersionRange) -> VersionRangeConfig {
+        VersionRangeConfig(val)
+    }
+}
+
+impl TryFrom<&'_ str> for VersionConfig {
+    type Error = BadVersionString;
+
+    #[inline]
+    fn try_from(val: &str) -> Result<VersionConfig, BadVersionString> {
+        let version = Version::try_from(val)?;
+
+        Ok(VersionConfig(version))
+    }
+}
+
+impl From<VersionConfig> for String {
+    #[inline]
+    fn from(val: VersionConfig) -> String {
+        val.0.to_string()
+    }
+}
+
+impl TryFrom<&'_ str> for VersionRangeConfig {
+    type Error = BadVersionRangeString;
+
+    #[inline]
+    fn try_from(
+        val: &str
+    ) -> Result<VersionRangeConfig, BadVersionRangeString> {
+        let version = VersionRange::try_from(val)?;
+
+        Ok(VersionRangeConfig(version))
+    }
+}
+
+impl From<VersionRangeConfig> for String {
+    #[inline]
+    fn from(val: VersionRangeConfig) -> String {
+        val.0.to_string()
+    }
+}
