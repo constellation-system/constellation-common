@@ -1092,6 +1092,10 @@ impl TryFrom<&'_ str> for VersionRange {
                     let components: Vec<&str> = val.split('-').collect();
 
                     match components[..] {
+                        ["*", "*"] => Ok(VersionRange {
+                            lower: None,
+                            upper: None
+                        }),
                         [lower, "*"] => {
                             let lower = VersionRangeElem::try_from(lower)
                                 .map_err(|_| {
@@ -1160,7 +1164,7 @@ impl TryFrom<&'_ str> for VersionRangeElem {
     fn try_from(
         val: &str
     ) -> Result<VersionRangeElem, BadVersionRangeElemString> {
-        let components: Vec<&str> = val.split(' ').collect();
+        let components: Vec<&str> = val.split('.').collect();
 
         match components[..] {
             [major] | [major, "*"] | [major, "*", "*"] => {
@@ -1693,5 +1697,461 @@ fn test_version_range_elem_sub_eq() {
         let rhs = VersionRangeElemSub::new(rhs.0, rhs.1, rhs.2);
 
         assert_eq!(&lhs.eq(&rhs), expected)
+    }
+}
+
+#[test]
+fn test_version_range_elem_from_str() {
+    let cases = &[
+        (
+            "1",
+            VersionRangeElem::Major(VersionRangeElemMajor { major: 1 })
+        ),
+        (
+            "1.*",
+            VersionRangeElem::Major(VersionRangeElemMajor { major: 1 })
+        ),
+        (
+            "1.*.*",
+            VersionRangeElem::Major(VersionRangeElemMajor { major: 1 })
+        ),
+        (
+            "1.2",
+            VersionRangeElem::Minor(VersionRangeElemMinor {
+                major: 1,
+                minor: 2
+            })
+        ),
+        (
+            "1.2.*",
+            VersionRangeElem::Minor(VersionRangeElemMinor {
+                major: 1,
+                minor: 2
+            })
+        ),
+        (
+            "1.2.3",
+            VersionRangeElem::Sub(VersionRangeElemSub {
+                major: 1,
+                minor: 2,
+                sub: 3
+            })
+        )
+    ];
+
+    for (str, expected) in cases.iter() {
+        let actual =
+            VersionRangeElem::try_from(*str).expect("Expected success");
+
+        assert_eq!(expected, &actual);
+    }
+}
+
+#[test]
+fn test_version_range_from_str() {
+    let cases =
+        &[
+            (
+                "*",
+                VersionRange {
+                    lower: None,
+                    upper: None
+                }
+            ),
+            (
+                "*-*",
+                VersionRange {
+                    lower: None,
+                    upper: None
+                }
+            ),
+            (
+                ">=1",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    )),
+                    upper: None
+                }
+            ),
+            (
+                ">=1.*",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    )),
+                    upper: None
+                }
+            ),
+            (
+                ">=1.*.*",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    )),
+                    upper: None
+                }
+            ),
+            (
+                ">=1.2",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Minor(
+                        VersionRangeElemMinor { major: 1, minor: 2 }
+                    )),
+                    upper: None
+                }
+            ),
+            (
+                ">=1.2.*",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Minor(
+                        VersionRangeElemMinor { major: 1, minor: 2 }
+                    )),
+                    upper: None
+                }
+            ),
+            (
+                ">=1.2.3",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Sub(VersionRangeElemSub {
+                        major: 1,
+                        minor: 2,
+                        sub: 3
+                    })),
+                    upper: None
+                }
+            ),
+            (
+                "1-*",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    )),
+                    upper: None
+                }
+            ),
+            (
+                "1.*-*",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    )),
+                    upper: None
+                }
+            ),
+            (
+                "1.*.*-*",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    )),
+                    upper: None
+                }
+            ),
+            (
+                "1.2-*",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Minor(
+                        VersionRangeElemMinor { major: 1, minor: 2 }
+                    )),
+                    upper: None
+                }
+            ),
+            (
+                "1.2.*-*",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Minor(
+                        VersionRangeElemMinor { major: 1, minor: 2 }
+                    )),
+                    upper: None
+                }
+            ),
+            (
+                "1.2.3-*",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Sub(VersionRangeElemSub {
+                        major: 1,
+                        minor: 2,
+                        sub: 3
+                    })),
+                    upper: None
+                }
+            ),
+            (
+                "<=1",
+                VersionRange {
+                    lower: None,
+                    upper: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    ))
+                }
+            ),
+            (
+                "<=1.*",
+                VersionRange {
+                    lower: None,
+                    upper: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    ))
+                }
+            ),
+            (
+                "<=1.*.*",
+                VersionRange {
+                    lower: None,
+                    upper: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    ))
+                }
+            ),
+            (
+                "<=1.2",
+                VersionRange {
+                    lower: None,
+                    upper: Some(VersionRangeElem::Minor(
+                        VersionRangeElemMinor { major: 1, minor: 2 }
+                    ))
+                }
+            ),
+            (
+                "<=1.2.*",
+                VersionRange {
+                    lower: None,
+                    upper: Some(VersionRangeElem::Minor(
+                        VersionRangeElemMinor { major: 1, minor: 2 }
+                    ))
+                }
+            ),
+            (
+                "<=1.2.3",
+                VersionRange {
+                    lower: None,
+                    upper: Some(VersionRangeElem::Sub(VersionRangeElemSub {
+                        major: 1,
+                        minor: 2,
+                        sub: 3
+                    }))
+                }
+            ),
+            (
+                "*-1",
+                VersionRange {
+                    lower: None,
+                    upper: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    ))
+                }
+            ),
+            (
+                "*-1.*",
+                VersionRange {
+                    lower: None,
+                    upper: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    ))
+                }
+            ),
+            (
+                "*-1.*.*",
+                VersionRange {
+                    lower: None,
+                    upper: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    ))
+                }
+            ),
+            (
+                "*-1.2",
+                VersionRange {
+                    lower: None,
+                    upper: Some(VersionRangeElem::Minor(
+                        VersionRangeElemMinor { major: 1, minor: 2 }
+                    ))
+                }
+            ),
+            (
+                "*-1.2.*",
+                VersionRange {
+                    lower: None,
+                    upper: Some(VersionRangeElem::Minor(
+                        VersionRangeElemMinor { major: 1, minor: 2 }
+                    ))
+                }
+            ),
+            (
+                "*-1.2.3",
+                VersionRange {
+                    lower: None,
+                    upper: Some(VersionRangeElem::Sub(VersionRangeElemSub {
+                        major: 1,
+                        minor: 2,
+                        sub: 3
+                    }))
+                }
+            ),
+            (
+                "1-2",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    )),
+                    upper: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 2 }
+                    ))
+                }
+            ),
+            (
+                "1.*-2",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    )),
+                    upper: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 2 }
+                    ))
+                }
+            ),
+            (
+                "1.*.*-2",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    )),
+                    upper: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 2 }
+                    ))
+                }
+            ),
+            (
+                "1-2.*",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    )),
+                    upper: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 2 }
+                    ))
+                }
+            ),
+            (
+                "1.*-2.*",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    )),
+                    upper: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 2 }
+                    ))
+                }
+            ),
+            (
+                "1.*.*-2.*",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    )),
+                    upper: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 2 }
+                    ))
+                }
+            ),
+            (
+                "1-2.*.*",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    )),
+                    upper: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 2 }
+                    ))
+                }
+            ),
+            (
+                "1.*-2.*.*",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    )),
+                    upper: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 2 }
+                    ))
+                }
+            ),
+            (
+                "1.*.*-2.*.*",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 1 }
+                    )),
+                    upper: Some(VersionRangeElem::Major(
+                        VersionRangeElemMajor { major: 2 }
+                    ))
+                }
+            ),
+            (
+                "1.2-2.3",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Minor(
+                        VersionRangeElemMinor { major: 1, minor: 2 }
+                    )),
+                    upper: Some(VersionRangeElem::Minor(
+                        VersionRangeElemMinor { major: 2, minor: 3 }
+                    ))
+                }
+            ),
+            (
+                "1.2.*-2.3",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Minor(
+                        VersionRangeElemMinor { major: 1, minor: 2 }
+                    )),
+                    upper: Some(VersionRangeElem::Minor(
+                        VersionRangeElemMinor { major: 2, minor: 3 }
+                    ))
+                }
+            ),
+            (
+                "1.2-2.3.*",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Minor(
+                        VersionRangeElemMinor { major: 1, minor: 2 }
+                    )),
+                    upper: Some(VersionRangeElem::Minor(
+                        VersionRangeElemMinor { major: 2, minor: 3 }
+                    ))
+                }
+            ),
+            (
+                "1.2.*-2.3.*",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Minor(
+                        VersionRangeElemMinor { major: 1, minor: 2 }
+                    )),
+                    upper: Some(VersionRangeElem::Minor(
+                        VersionRangeElemMinor { major: 2, minor: 3 }
+                    ))
+                }
+            ),
+            (
+                "1.2.3-2.3.4",
+                VersionRange {
+                    lower: Some(VersionRangeElem::Sub(VersionRangeElemSub {
+                        major: 1,
+                        minor: 2,
+                        sub: 3
+                    })),
+                    upper: Some(VersionRangeElem::Sub(VersionRangeElemSub {
+                        major: 2,
+                        minor: 3,
+                        sub: 4
+                    }))
+                }
+            )
+        ];
+
+    for (str, expected) in cases.iter() {
+        let actual = VersionRange::try_from(*str).expect("Expected success");
+
+        assert_eq!(expected, &actual);
     }
 }

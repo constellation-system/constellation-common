@@ -40,16 +40,26 @@ use crate::version::VersionRange;
 #[derive(Clone, Debug, Deserialize, PartialEq, PartialOrd, Serialize)]
 #[serde(rename = "version")]
 #[serde(rename_all = "kebab-case")]
-#[serde(try_from = "&str")]
+#[serde(try_from = "String")]
 #[serde(into = "String")]
 pub struct VersionConfig(Version);
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename = "version-range")]
 #[serde(rename_all = "kebab-case")]
-#[serde(try_from = "&str")]
+#[serde(try_from = "String")]
 #[serde(into = "String")]
 pub struct VersionRangeConfig(VersionRange);
+
+impl Default for VersionRangeConfig {
+    #[inline]
+    fn default() -> Self {
+        VersionRangeConfig(VersionRange {
+            upper: None,
+            lower: None
+        })
+    }
+}
 
 impl From<VersionConfig> for Version {
     #[inline]
@@ -79,6 +89,15 @@ impl From<VersionRange> for VersionRangeConfig {
     }
 }
 
+impl TryFrom<String> for VersionConfig {
+    type Error = BadVersionString;
+
+    #[inline]
+    fn try_from(val: String) -> Result<VersionConfig, BadVersionString> {
+        VersionConfig::try_from(val.as_str())
+    }
+}
+
 impl TryFrom<&'_ str> for VersionConfig {
     type Error = BadVersionString;
 
@@ -94,6 +113,17 @@ impl From<VersionConfig> for String {
     #[inline]
     fn from(val: VersionConfig) -> String {
         val.0.to_string()
+    }
+}
+
+impl TryFrom<String> for VersionRangeConfig {
+    type Error = BadVersionRangeString;
+
+    #[inline]
+    fn try_from(
+        val: String
+    ) -> Result<VersionRangeConfig, BadVersionRangeString> {
+        VersionRangeConfig::try_from(val.as_str())
     }
 }
 
