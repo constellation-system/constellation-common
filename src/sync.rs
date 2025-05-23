@@ -22,12 +22,19 @@ use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
+use bitvec::bitvec;
+use bitvec::prelude::Lsb0;
+use bitvec::vec::BitVec;
+
 use crate::error::MutexPoison;
 
 struct NotifyContent {
     cond: Condvar,
-    flag: Mutex<bool>
+    flags: Mutex<BitVec>
 }
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct NotifyIdx(usize);
 
 /// One-shot notification that supports a wait operation.
 #[derive(Clone)]
@@ -39,15 +46,24 @@ impl Notify {
     pub fn new() -> Self {
         Notify(Arc::new(NotifyContent {
             cond: Condvar::new(),
-            flag: Mutex::new(false)
+            flags: Mutex::new(bitvec![])
         }))
+    }
+
+    pub fn register(&self) -> Result<NotifyIdx, MutexPoison> {
+        let mut guard = self.0.flags.lock().map_err(|_| MutexPoison)?;
+        let out = guard.len();
+
+        guard.push(false);
+
+        Ok(NotifyIdx(out))
     }
 
     /// Send the notification.
     pub fn notify(&self) -> Result<(), MutexPoison> {
-        let mut guard = self.0.flag.lock().map_err(|_| MutexPoison)?;
+        let mut guard = self.0.flags.lock().map_err(|_| MutexPoison)?;
 
-        *guard = true;
+        guard.fill(true);
         self.0.cond.notify_all();
 
         Ok(())
@@ -58,12 +74,14 @@ impl Notify {
     /// This will filter spurious wakeups.
     pub fn wait_timeout(
         &self,
+        idx: &NotifyIdx,
         timeout: Duration
     ) -> Result<bool, MutexPoison> {
-        let mut guard = self.0.flag.lock().map_err(|_| MutexPoison)?;
+        let idx = idx.0;
+        let mut guard = self.0.flags.lock().map_err(|_| MutexPoison)?;
         let when = Instant::now() + timeout;
 
-        while Instant::now() < when && !*guard {
+        while Instant::now() < when && !guard[idx] {
             guard = self
                 .0
                 .cond
@@ -72,21 +90,23 @@ impl Notify {
                 .0;
         }
 
-        let out = *guard;
+        let out = guard[idx];
 
-        *guard = false;
+        guard.set(idx, false);
 
         Ok(out)
     }
 
     pub fn wait_timeout_no_reset(
         &self,
+        idx: &NotifyIdx,
         timeout: Duration
     ) -> Result<bool, MutexPoison> {
-        let mut guard = self.0.flag.lock().map_err(|_| MutexPoison)?;
+        let idx = idx.0;
+        let mut guard = self.0.flags.lock().map_err(|_| MutexPoison)?;
         let when = Instant::now() + timeout;
 
-        while Instant::now() < when && !*guard {
+        while Instant::now() < when && !guard[idx] {
             guard = self
                 .0
                 .cond
@@ -95,30 +115,36 @@ impl Notify {
                 .0;
         }
 
-        let out = *guard;
-
-        Ok(out)
+        Ok(guard[idx])
     }
 
     /// Wait on the notification.
     ///
     /// This will filter spurious wakeups.
-    pub fn wait(&self) -> Result<(), MutexPoison> {
-        let mut guard = self.0.flag.lock().map_err(|_| MutexPoison)?;
+    pub fn wait(
+        &self,
+        idx: &NotifyIdx
+    ) -> Result<(), MutexPoison> {
+        let idx = idx.0;
+        let mut guard = self.0.flags.lock().map_err(|_| MutexPoison)?;
 
-        while !*guard {
+        while !guard[idx] {
             guard = self.0.cond.wait(guard).map_err(|_| MutexPoison)?;
         }
 
-        *guard = false;
+        guard.set(idx, false);
 
         Ok(())
     }
 
-    pub fn wait_no_reset(&self) -> Result<(), MutexPoison> {
-        let mut guard = self.0.flag.lock().map_err(|_| MutexPoison)?;
+    pub fn wait_no_reset(
+        &self,
+        idx: &NotifyIdx
+    ) -> Result<(), MutexPoison> {
+        let idx = idx.0;
+        let mut guard = self.0.flags.lock().map_err(|_| MutexPoison)?;
 
-        while !*guard {
+        while !guard[idx] {
             guard = self.0.cond.wait(guard).map_err(|_| MutexPoison)?;
         }
 
@@ -141,10 +167,11 @@ use std::thread::spawn;
 #[test]
 fn test_notify() {
     let notify = Notify::new();
+    let idx = notify.register().expect("Expected success");
 
     let listen_notify = notify.clone();
     let listen = spawn(move || {
-        listen_notify.wait().expect("Expected success");
+        listen_notify.wait(idx).expect("Expected success");
     });
     let send_notify = notify.clone();
     let send = spawn(move || {
@@ -159,6 +186,7 @@ fn test_notify() {
 #[test]
 fn test_notify_before() {
     let notify = Notify::new();
+    let idx = notify.register().expect("Expected success");
 
     let send_notify = notify.clone();
     let send = spawn(move || {
@@ -167,7 +195,7 @@ fn test_notify_before() {
     let listen_notify = notify.clone();
     let listen = spawn(move || {
         sleep(Duration::from_secs(1));
-        listen_notify.wait().expect("Expected success");
+        listen_notify.wait(idx).expect("Expected success");
     });
 
     listen.join().unwrap();
@@ -177,11 +205,12 @@ fn test_notify_before() {
 #[test]
 fn test_notify_wait_timeout() {
     let notify = Notify::new();
+    let idx = notify.register().expect("Expected success");
 
     let listen_notify = notify.clone();
     let listen = spawn(move || {
         let res = listen_notify
-            .wait_timeout(Duration::from_millis(100))
+            .wait_timeout(idx, Duration::from_millis(100))
             .expect("Expected success");
 
         assert!(!res)

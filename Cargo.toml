@@ -41,6 +41,7 @@ unix = []
 
 [dependencies]
 asn1rs = { version = "0.3" }
+bitvec = { version = "1.0" }
 blake2 = { version = "0.10" }
 digest = { version = "0.10" }
 libgssapi = { version = "0.8", optional = true }
