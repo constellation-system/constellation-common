@@ -168,6 +168,13 @@ pub enum CodecStreamError<Codec, IO> {
     }
 }
 
+impl<T> From<MutexPoison> for WithMutexPoison<T> {
+    #[inline]
+    fn from(_val: MutexPoison) -> WithMutexPoison<T> {
+        WithMutexPoison::MutexPoison
+    }
+}
+
 impl Ord for ErrorScope {
     fn cmp(
         &self,

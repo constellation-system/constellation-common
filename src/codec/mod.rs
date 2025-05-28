@@ -49,6 +49,15 @@ pub trait Codec<T>: Sized {
     /// Create a new instance of this codec.
     fn create(param: Self::Param) -> Result<Self, Self::CreateError>;
 
+    /// Get a safe size for buffers for [encode](Codec::encode)ing
+    /// `val`.
+    ///
+    /// This can return a size larger than needed.
+    fn buf_size(
+        &self,
+        val: &T
+    ) -> usize;
+
     /// Encode a message into `buf` and return the number of bytes produced.
     ///
     /// The slice `buf` must contain at least
@@ -63,7 +72,13 @@ pub trait Codec<T>: Sized {
     fn encode_to_vec(
         &mut self,
         val: &T
-    ) -> Result<Vec<u8>, Self::EncodeError>;
+    ) -> Result<Vec<u8>, Self::EncodeError> {
+        let mut buf = vec![0; self.buf_size(val)];
+
+        self.encode(val, &mut buf)?;
+
+        Ok(buf)
+    }
 
     /// Decode a message into `buf` and return the number of bytes consumed.
     ///
