@@ -162,9 +162,10 @@ impl Default for Retry {
 }
 
 impl Retry {
-    /// Default `Retry` parameters for normal terrestrial networks.
-    pub const TERRESTRIAL_NETWORK_DEFAULT: Retry = Retry {
-        factor: 100000,
+    /// Default `Retry` parameters for resubmitting large object
+    /// transfers on normal terrestrial networks.
+    pub const TERRESTRIAL_LARGE_OBJ_RESUB_DEFAULT: Retry = Retry {
+        factor: 300000000,
         exp_base: 2.0,
         exp_factor: 1.0,
         exp_rounds_cap: 20,
@@ -173,11 +174,9 @@ impl Retry {
         addend: 0,
         max_random: 100000
     };
-
-    /// Default `Retry` parameters for resubmitting large object
-    /// transfers on normal terrestrial networks.
-    pub const TERRESTRIAL_LARGE_OBJ_RESUB_DEFAULT: Retry = Retry {
-        factor: 300000000,
+    /// Default `Retry` parameters for normal terrestrial networks.
+    pub const TERRESTRIAL_NETWORK_DEFAULT: Retry = Retry {
+        factor: 100000,
         exp_base: 2.0,
         exp_factor: 1.0,
         exp_rounds_cap: 20,
