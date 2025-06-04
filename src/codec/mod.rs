@@ -41,13 +41,20 @@ pub trait Codec<T>: Sized {
     type Param;
     /// Errors that can occur when creating an instance.
     type CreateError: Display + ScopedError;
-    /// Errors that can occur when encoding.
-    type EncodeError: Display + ScopedError;
-    /// Errors that can occur when decoding.
-    type DecodeError: Display + ScopedError;
 
     /// Create a new instance of this codec.
     fn create(param: Self::Param) -> Result<Self, Self::CreateError>;
+}
+
+/// Trait for encoding/decoding logic on types to datagrams.
+pub trait DatagramCodec<T>: Codec<T> + Sized {
+    /// Maximum message size.
+    const MAX_BYTES: usize;
+}
+
+pub trait Encoder<T> {
+    /// Errors that can occur when encoding.
+    type EncodeError: Display + ScopedError;
 
     /// Get a safe size for buffers for [encode](Codec::encode)ing
     /// `val`.
@@ -79,6 +86,11 @@ pub trait Codec<T>: Sized {
 
         Ok(buf)
     }
+}
+
+pub trait Decoder<T> {
+    /// Errors that can occur when decoding.
+    type DecodeError: Display + ScopedError;
 
     /// Decode a message into `buf` and return the number of bytes consumed.
     ///
@@ -90,8 +102,7 @@ pub trait Codec<T>: Sized {
     ) -> Result<(T, usize), Self::DecodeError>;
 }
 
-pub trait BytestreamCodec<T> {
-    type StreamDecodeError: Display + ScopedError;
+pub trait BytestreamEncoder<T> {
     type StreamEncodeError: Display + ScopedError;
 
     fn encode_to_stream<W>(
@@ -101,6 +112,10 @@ pub trait BytestreamCodec<T> {
     ) -> Result<usize, Self::StreamEncodeError>
     where
         W: Write;
+}
+
+pub trait BytestreamDecoder<T> {
+    type StreamDecodeError: Display + ScopedError;
 
     fn decode_from_stream<R>(
         &mut self,
@@ -108,10 +123,4 @@ pub trait BytestreamCodec<T> {
     ) -> Result<(T, usize), Self::StreamDecodeError>
     where
         R: Read;
-}
-
-/// Trait for encoding/decoding logic on types to datagrams.
-pub trait DatagramCodec<T>: Codec<T> + Sized {
-    /// Maximum message size.
-    const MAX_BYTES: usize;
 }

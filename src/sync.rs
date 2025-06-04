@@ -171,7 +171,7 @@ fn test_notify() {
 
     let listen_notify = notify.clone();
     let listen = spawn(move || {
-        listen_notify.wait(idx).expect("Expected success");
+        listen_notify.wait(&idx).expect("Expected success");
     });
     let send_notify = notify.clone();
     let send = spawn(move || {
@@ -195,7 +195,7 @@ fn test_notify_before() {
     let listen_notify = notify.clone();
     let listen = spawn(move || {
         sleep(Duration::from_secs(1));
-        listen_notify.wait(idx).expect("Expected success");
+        listen_notify.wait(&idx).expect("Expected success");
     });
 
     listen.join().unwrap();
@@ -210,7 +210,7 @@ fn test_notify_wait_timeout() {
     let listen_notify = notify.clone();
     let listen = spawn(move || {
         let res = listen_notify
-            .wait_timeout(idx, Duration::from_millis(100))
+            .wait_timeout(&idx, Duration::from_millis(100))
             .expect("Expected success");
 
         assert!(!res)

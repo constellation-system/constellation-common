@@ -40,14 +40,17 @@ use asn1rs::syn::io::UperWriter;
 use asn1rs::syn::Readable;
 use asn1rs::syn::Writable;
 
-use crate::codec::BytestreamCodec;
+use crate::codec::BytestreamDecoder;
+use crate::codec::BytestreamEncoder;
 use crate::codec::Codec;
 use crate::codec::DatagramCodec;
+use crate::codec::Decoder;
+use crate::codec::Encoder;
 use crate::error::CodecStreamError;
 
 /// Sub-trait of [DatagramCodec] for things that can be encoded using
 /// the ASN.1 packed encoding rules (PER).
-pub trait DatagramPERCodec<T>: DatagramCodec<T>
+pub trait DatagramPEREncoder<T>: DatagramCodec<T>
 where
     T: Readable + Writable {
     /// Encode `val` into the [UperWriter].
@@ -59,8 +62,13 @@ where
     ) -> Result<(), Error> {
         writer.write(val)
     }
+}
 
+pub trait DatagramPERDecoder<T>: DatagramCodec<T>
+where
+    T: Readable + Writable {
     /// Decode a value of type `T` from the [UperReader].
+    #[inline]
     fn decode_from_reader<B>(
         &mut self,
         reader: &mut UperReader<B>
@@ -97,14 +105,54 @@ where
     T: Readable + Writable
 {
     type CreateError = Infallible;
-    type DecodeError = Error;
-    type EncodeError = Error;
     type Param = ();
 
     #[inline]
     fn create(_param: ()) -> Result<Self, Infallible> {
         Ok(PERCodec(PhantomData))
     }
+}
+
+impl<T, const MAX_BITS: usize> Decoder<T> for PERCodec<T, MAX_BITS>
+where
+    T: Readable + Writable
+{
+    type DecodeError = Error;
+
+    fn decode(
+        &mut self,
+        buf: &[u8]
+    ) -> Result<(T, usize), Self::DecodeError> {
+        let (mut reader, max_bits) = if buf.len() > Self::MAX_BYTES {
+            let max_bits = Self::MAX_BYTES * 8;
+
+            (
+                UperReader::from((&buf[..Self::MAX_BYTES], max_bits)),
+                max_bits
+            )
+        } else {
+            let max_bits = buf.len() * 8;
+
+            (UperReader::from((buf, max_bits)), max_bits)
+        };
+        let out = self.decode_from_reader(&mut reader)?;
+        let nbits = max_bits - reader.bits_remaining();
+
+        let nbytes = if nbits != 0 {
+            ((nbits - 1) >> 3) + 1
+        } else {
+            0
+        };
+
+        Ok((out, nbytes))
+    }
+}
+
+impl<T, const MAX_BITS: usize> Encoder<T> for PERCodec<T, MAX_BITS>
+where
+    T: Readable + Writable
+{
+    type EncodeError = Error;
 
     #[inline]
     fn buf_size(
@@ -143,66 +191,13 @@ where
 
         Ok(len)
     }
-
-    fn decode(
-        &mut self,
-        buf: &[u8]
-    ) -> Result<(T, usize), Self::DecodeError> {
-        let (mut reader, max_bits) = if buf.len() > Self::MAX_BYTES {
-            let max_bits = Self::MAX_BYTES * 8;
-
-            (
-                UperReader::from((&buf[..Self::MAX_BYTES], max_bits)),
-                max_bits
-            )
-        } else {
-            let max_bits = buf.len() * 8;
-
-            (UperReader::from((buf, max_bits)), max_bits)
-        };
-        let out = self.decode_from_reader(&mut reader)?;
-        let nbits = max_bits - reader.bits_remaining();
-
-        let nbytes = if nbits != 0 {
-            ((nbits - 1) >> 3) + 1
-        } else {
-            0
-        };
-
-        Ok((out, nbytes))
-    }
 }
 
-impl<T, const MAX_BITS: usize> BytestreamCodec<T> for PERCodec<T, MAX_BITS>
+impl<T, const MAX_BITS: usize> BytestreamDecoder<T> for PERCodec<T, MAX_BITS>
 where
     T: Readable + Writable
 {
     type StreamDecodeError = CodecStreamError<Error, std::io::Error>;
-    type StreamEncodeError = CodecStreamError<Error, std::io::Error>;
-
-    fn encode_to_stream<W>(
-        &mut self,
-        stream: &mut W,
-        val: &T
-    ) -> Result<usize, Self::StreamEncodeError>
-    where
-        W: Write {
-        // XXX eventually, this should just directly encode to the stream.
-        let mut buf = vec![0; Self::MAX_BYTES + 2];
-        let nbytes = self
-            .encode(val, &mut buf[2..Self::MAX_BYTES + 2])
-            .map_err(|err| CodecStreamError::Codec { err: err })?;
-
-        buf[0] = (nbytes & 0xff) as u8;
-        buf[1] = ((nbytes >> 1) & 0xff) as u8;
-        buf.truncate(nbytes + 2);
-
-        stream
-            .write_all(&buf)
-            .map_err(|err| CodecStreamError::IO { err: err })?;
-
-        Ok(nbytes + 2)
-    }
 
     fn decode_from_stream<R>(
         &mut self,
@@ -232,6 +227,37 @@ where
     }
 }
 
+impl<T, const MAX_BITS: usize> BytestreamEncoder<T> for PERCodec<T, MAX_BITS>
+where
+    T: Readable + Writable
+{
+    type StreamEncodeError = CodecStreamError<Error, std::io::Error>;
+
+    fn encode_to_stream<W>(
+        &mut self,
+        stream: &mut W,
+        val: &T
+    ) -> Result<usize, Self::StreamEncodeError>
+    where
+        W: Write {
+        // XXX eventually, this should just directly encode to the stream.
+        let mut buf = vec![0; Self::MAX_BYTES + 2];
+        let nbytes = self
+            .encode(val, &mut buf[2..Self::MAX_BYTES + 2])
+            .map_err(|err| CodecStreamError::Codec { err: err })?;
+
+        buf[0] = (nbytes & 0xff) as u8;
+        buf[1] = ((nbytes >> 1) & 0xff) as u8;
+        buf.truncate(nbytes + 2);
+
+        stream
+            .write_all(&buf)
+            .map_err(|err| CodecStreamError::IO { err: err })?;
+
+        Ok(nbytes + 2)
+    }
+}
+
 impl<T, const MAX_BITS: usize> DatagramCodec<T> for PERCodec<T, MAX_BITS>
 where
     T: Readable + Writable
@@ -239,7 +265,12 @@ where
     const MAX_BYTES: usize = ((MAX_BITS - 1) >> 3) + 1;
 }
 
-impl<T, const MAX_BITS: usize> DatagramPERCodec<T> for PERCodec<T, MAX_BITS> where
+impl<T, const MAX_BITS: usize> DatagramPERDecoder<T> for PERCodec<T, MAX_BITS> where
+    T: Readable + Writable
+{
+}
+
+impl<T, const MAX_BITS: usize> DatagramPEREncoder<T> for PERCodec<T, MAX_BITS> where
     T: Readable + Writable
 {
 }

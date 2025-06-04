@@ -38,7 +38,7 @@ use skein::consts::U64;
 use skein::Skein512;
 use whirlpool::Whirlpool;
 
-use crate::codec::Codec;
+use crate::codec::Encoder;
 
 /// Trait for IDs generated from hashing a more complex type.
 pub trait HashID: Sized {
@@ -84,7 +84,7 @@ pub trait HashAlgo {
         val: &T
     ) -> Result<Self::HashID, C::EncodeError>
     where
-        C: Codec<T> {
+        C: Encoder<T> {
         let encoded = codec.encode_to_vec(val)?;
 
         Ok(self.hash_bytes(once(&encoded[..])))

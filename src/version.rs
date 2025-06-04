@@ -1233,6 +1233,10 @@ use asn1rs::syn::Writable;
 use crate::codec::Codec;
 #[cfg(test)]
 use crate::codec::DatagramCodec;
+#[cfg(test)]
+use crate::codec::Decoder;
+#[cfg(test)]
+use crate::codec::Encoder;
 
 #[test]
 fn test_version_codec() {
