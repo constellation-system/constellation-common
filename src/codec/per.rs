@@ -100,7 +100,7 @@ where
     }
 }
 
-impl<T, const MAX_BITS: usize> Codec<T> for PERCodec<T, MAX_BITS>
+impl<T, const MAX_BITS: usize> Codec for PERCodec<T, MAX_BITS>
 where
     T: Readable + Writable
 {

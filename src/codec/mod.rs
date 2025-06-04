@@ -36,7 +36,7 @@ pub mod per;
 
 use crate::error::ScopedError;
 
-pub trait Codec<T>: Sized {
+pub trait Codec: Sized {
     /// Parameter for the [create](DatagramCodec::create) function.
     type Param;
     /// Errors that can occur when creating an instance.
@@ -47,7 +47,7 @@ pub trait Codec<T>: Sized {
 }
 
 /// Trait for encoding/decoding logic on types to datagrams.
-pub trait DatagramCodec<T>: Codec<T> + Sized {
+pub trait DatagramCodec<T>: Codec + Sized {
     /// Maximum message size.
     const MAX_BYTES: usize;
 }
