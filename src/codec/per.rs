@@ -42,10 +42,10 @@ use asn1rs::syn::Writable;
 
 use crate::codec::BytestreamDecoder;
 use crate::codec::BytestreamEncoder;
-use crate::codec::Codec;
 use crate::codec::DatagramCodec;
 use crate::codec::Decoder;
 use crate::codec::Encoder;
+use crate::config::Create;
 use crate::error::CodecStreamError;
 
 /// Sub-trait of [DatagramCodec] for things that can be encoded using
@@ -100,15 +100,15 @@ where
     }
 }
 
-impl<T, const MAX_BITS: usize> Codec for PERCodec<T, MAX_BITS>
+impl<T, const MAX_BITS: usize> Create for PERCodec<T, MAX_BITS>
 where
     T: Readable + Writable
 {
+    type Config = ();
     type CreateError = Infallible;
-    type Param = ();
 
     #[inline]
-    fn create(_param: ()) -> Result<Self, Infallible> {
+    fn create(_config: ()) -> Result<Self, Infallible> {
         Ok(PERCodec(PhantomData))
     }
 }

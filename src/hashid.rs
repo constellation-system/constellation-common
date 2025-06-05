@@ -18,7 +18,7 @@
 
 //! Wrapper types for cryptographic hashes and IDs generated from them.
 use std::array::TryFromSliceError;
-use std::convert::TryFrom;
+use std::convert::Infallible;
 use std::convert::TryInto;
 use std::fmt::Display;
 use std::fmt::Error;
@@ -29,9 +29,6 @@ use std::iter::once;
 use blake2::Blake2b512;
 use digest::Digest;
 use ripemd::Ripemd160;
-use serde::Deserialize;
-use serde::Serialize;
-use serde::Serializer;
 use sha2::Sha384;
 use sha3::Sha3_512;
 use skein::consts::U64;
@@ -39,6 +36,8 @@ use skein::Skein512;
 use whirlpool::Whirlpool;
 
 use crate::codec::Encoder;
+use crate::config::CompoundHashAlgoConfig;
+use crate::config::Create;
 
 /// Trait for IDs generated from hashing a more complex type.
 pub trait HashID: Sized {
@@ -155,8 +154,6 @@ pub struct WhirlpoolID {
 /// function.
 ///
 /// This also can serve as a configuration object, and can be deserialized.
-#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[serde(try_from = "&'_ str")]
 pub enum CompoundHashAlgo {
     /// The Blake2b hash algorithm.
     Blake2b { blake2b: Blake2bAlgo },
@@ -610,59 +607,33 @@ impl Display for WhirlpoolID {
     }
 }
 
-impl Default for CompoundHashAlgo {
-    #[inline]
-    fn default() -> Self {
-        CompoundHashAlgo::SHA3 { sha3: SHA3Algo }
-    }
-}
+impl Create for CompoundHashAlgo {
+    type Config = CompoundHashAlgoConfig;
+    type CreateError = Infallible;
 
-impl<'a> TryFrom<&'a str> for CompoundHashAlgo {
-    type Error = &'a str;
-
-    fn try_from(name: &'a str) -> Result<CompoundHashAlgo, &'a str> {
-        match name {
-            "Blake2b" => Ok(CompoundHashAlgo::Blake2b {
+    fn create(config: CompoundHashAlgoConfig) -> Result<Self, Infallible> {
+        match config {
+            CompoundHashAlgoConfig::Blake2b => Ok(CompoundHashAlgo::Blake2b {
                 blake2b: Blake2bAlgo
             }),
-            "RipeMD-160" => Ok(CompoundHashAlgo::RipeMD160 {
-                ripemd160: RipeMD160Algo
-            }),
-            "SHA3-512" => Ok(CompoundHashAlgo::SHA3 { sha3: SHA3Algo }),
-            "SHA384" => Ok(CompoundHashAlgo::SHA384 { sha384: SHA384Algo }),
-            "Skein" => Ok(CompoundHashAlgo::Skein { skein: SkeinAlgo }),
-            "Whirlpool" => Ok(CompoundHashAlgo::Whirlpool {
-                whirlpool: WhirlpoolAlgo
-            }),
-            err => Err(err)
-        }
-    }
-}
-
-impl Serialize for CompoundHashAlgo {
-    #[inline]
-    fn serialize<S>(
-        &self,
-        serializer: S
-    ) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer {
-        match self {
-            CompoundHashAlgo::Blake2b { .. } => {
-                serializer.serialize_str("Blake2b")
+            CompoundHashAlgoConfig::RipeMD160 => {
+                Ok(CompoundHashAlgo::RipeMD160 {
+                    ripemd160: RipeMD160Algo
+                })
             }
-            CompoundHashAlgo::RipeMD160 { .. } => {
-                serializer.serialize_str("RipeMD-160")
+            CompoundHashAlgoConfig::SHA3 => {
+                Ok(CompoundHashAlgo::SHA3 { sha3: SHA3Algo })
             }
-            CompoundHashAlgo::SHA3 { .. } => {
-                serializer.serialize_str("SHA3-512")
+            CompoundHashAlgoConfig::SHA384 => {
+                Ok(CompoundHashAlgo::SHA384 { sha384: SHA384Algo })
             }
-            CompoundHashAlgo::SHA384 { .. } => {
-                serializer.serialize_str("SHA384")
+            CompoundHashAlgoConfig::Skein => {
+                Ok(CompoundHashAlgo::Skein { skein: SkeinAlgo })
             }
-            CompoundHashAlgo::Skein { .. } => serializer.serialize_str("Skein"),
-            CompoundHashAlgo::Whirlpool { .. } => {
-                serializer.serialize_str("Whirlpool")
+            CompoundHashAlgoConfig::Whirlpool => {
+                Ok(CompoundHashAlgo::Whirlpool {
+                    whirlpool: WhirlpoolAlgo
+                })
             }
         }
     }

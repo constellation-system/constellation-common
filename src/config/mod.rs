@@ -28,6 +28,9 @@ pub mod pki;
 // pub mod signing;
 
 use std::convert::TryFrom;
+use std::fmt::Display;
+use std::fmt::Error;
+use std::fmt::Formatter;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -36,6 +39,24 @@ use crate::version::BadVersionRangeString;
 use crate::version::BadVersionString;
 use crate::version::Version;
 use crate::version::VersionRange;
+
+pub trait Create: Sized {
+    type CreateError: Display;
+    type Config;
+
+    fn create(config: Self::Config) -> Result<Self, Self::CreateError>;
+}
+
+pub trait CreateArg: Sized {
+    type CreateError: Display;
+    type Config;
+    type Arg;
+
+    fn create(
+        config: Self::Config,
+        arg: Self::Arg
+    ) -> Result<Self, Self::CreateError>;
+}
 
 #[derive(Clone, Debug, Deserialize, PartialEq, PartialOrd, Serialize)]
 #[serde(rename = "version")]
@@ -50,6 +71,57 @@ pub struct VersionConfig(Version);
 #[serde(try_from = "String")]
 #[serde(into = "String")]
 pub struct VersionRangeConfig(VersionRange);
+
+/// Allowed verification flags.
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(untagged)]
+#[serde(try_from = "String")]
+pub enum CompoundHashAlgoConfig {
+    /// The Blake2b hash algorithm.
+    Blake2b,
+    /// The RipeMD-160 hash algorithm.
+    RipeMD160,
+    /// The SHA3-512 hash algorithm.
+    SHA3,
+    /// The SHA384 hash algorithm.
+    SHA384,
+    /// The Skein-512 hash algorithm.
+    Skein,
+    /// The Whirlpool hash algorithm.
+    Whirlpool
+}
+
+pub struct BadHash(String);
+
+impl Default for CompoundHashAlgoConfig {
+    #[inline]
+    fn default() -> Self {
+        CompoundHashAlgoConfig::SHA3
+    }
+}
+
+impl From<CompoundHashAlgoConfig> for String {
+    #[inline]
+    fn from(val: CompoundHashAlgoConfig) -> String {
+        val.to_string()
+    }
+}
+
+impl TryFrom<String> for CompoundHashAlgoConfig {
+    type Error = BadHash;
+
+    fn try_from(val: String) -> Result<Self, BadHash> {
+        match val.to_lowercase().as_str() {
+            "blake2b" => Ok(CompoundHashAlgoConfig::Blake2b),
+            "ripemd160" | "ripemd-160" => Ok(CompoundHashAlgoConfig::RipeMD160),
+            "sha3" | "sha3-512" => Ok(CompoundHashAlgoConfig::SHA3),
+            "sha384" | "sha2-384" => Ok(CompoundHashAlgoConfig::SHA3),
+            "skein" | "skein-512" => Ok(CompoundHashAlgoConfig::Skein),
+            "whirlpool" => Ok(CompoundHashAlgoConfig::Whirlpool),
+            _ => Err(BadHash(val))
+        }
+    }
+}
 
 impl Default for VersionRangeConfig {
     #[inline]
@@ -144,5 +216,30 @@ impl From<VersionRangeConfig> for String {
     #[inline]
     fn from(val: VersionRangeConfig) -> String {
         val.0.to_string()
+    }
+}
+
+impl Display for CompoundHashAlgoConfig {
+    fn fmt(
+        &self,
+        f: &mut Formatter<'_>
+    ) -> Result<(), Error> {
+        match self {
+            CompoundHashAlgoConfig::Blake2b => write!(f, "blake2b"),
+            CompoundHashAlgoConfig::RipeMD160 => write!(f, "ripemd160"),
+            CompoundHashAlgoConfig::SHA3 => write!(f, "SHA3"),
+            CompoundHashAlgoConfig::SHA384 => write!(f, "SHA384"),
+            CompoundHashAlgoConfig::Skein => write!(f, "skein"),
+            CompoundHashAlgoConfig::Whirlpool => write!(f, "whirlpool")
+        }
+    }
+}
+
+impl Display for BadHash {
+    fn fmt(
+        &self,
+        f: &mut Formatter<'_>
+    ) -> Result<(), Error> {
+        write!(f, "unknown hash algorithm {}", self.0)
     }
 }

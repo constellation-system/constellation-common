@@ -23,19 +23,12 @@
 //! the simplest of these, and is a simple ascending counter.  Other
 //! provide a cryptographically-secure random number stream.
 
+use std::convert::Infallible;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-/// Trait for ID generators.
-pub trait IDGen: Iterator {
-    /// Configuration type for this `IDGen`.
-    type Config: Default;
-
-    /// Create an instance of the `IDGen` from a configuration and a
-    /// current ID.
-    fn create(config: Self::Config) -> Self;
-}
+use crate::config::Create;
 
 /// Ascending count ID stream.
 ///
@@ -51,35 +44,39 @@ where
 
 pub struct SharedIDGen<Inner>
 where
-    Inner: IDGen,
+    Inner: Iterator,
     Inner::Item: Default {
     inner: Arc<Mutex<Inner>>
 }
 
-impl<T> IDGen for AscendingCount<T>
+impl<T> Create for AscendingCount<T>
 where
     T: From<u128>
 {
     type Config = ();
+    type CreateError = Infallible;
 
     #[inline]
-    fn create(_config: Self::Config) -> Self {
-        AscendingCount::default()
+    fn create(_config: Self::Config) -> Result<Self, Infallible> {
+        Ok(AscendingCount::default())
     }
 }
 
-impl<Inner> IDGen for SharedIDGen<Inner>
+impl<Inner> Create for SharedIDGen<Inner>
 where
-    Inner: IDGen,
+    Inner: Create + Iterator,
     Inner::Item: Default
 {
     type Config = Inner::Config;
+    type CreateError = Inner::CreateError;
 
     #[inline]
-    fn create(config: Self::Config) -> Self {
-        SharedIDGen {
-            inner: Arc::new(Mutex::new(Inner::create(config)))
-        }
+    fn create(config: Self::Config) -> Result<Self, Self::CreateError> {
+        let inner = Inner::create(config)?;
+
+        Ok(SharedIDGen {
+            inner: Arc::new(Mutex::new(inner))
+        })
     }
 }
 
@@ -114,7 +111,7 @@ where
 
 impl<Inner> Iterator for SharedIDGen<Inner>
 where
-    Inner: IDGen,
+    Inner: Iterator,
     Inner::Item: Default
 {
     type Item = Inner::Item;

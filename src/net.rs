@@ -37,6 +37,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde::Serializer;
 
+use crate::config::CreateArg;
 use crate::error::ScopedError;
 
 /// Trait for sources of messages to be sent over a private channel.
@@ -445,6 +446,23 @@ where
         addr: Addr
     ) -> Result<(usize, Addr), Self::Error> {
         Ok((buf.len(), addr))
+    }
+}
+
+impl<Addr> CreateArg for PassthruDatagramXfrm<Addr>
+where
+    Addr: Clone + Display + Eq + Send
+{
+    type Arg = Addr;
+    type Config = PassthruDatagramXfrmParam;
+    type CreateError = Infallible;
+
+    #[inline]
+    fn create(
+        _param: PassthruDatagramXfrmParam,
+        _addr: Addr
+    ) -> Result<Self, Infallible> {
+        Ok(PassthruDatagramXfrm::default())
     }
 }
 
