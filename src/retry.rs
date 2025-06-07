@@ -28,13 +28,18 @@
 
 use std::cmp::min;
 use std::convert::Infallible;
+use std::fmt::Error;
+use std::fmt::Formatter;
 use std::time::Duration;
 use std::time::Instant;
 
 use rand::thread_rng;
 use rand::Rng;
+use serde::de::Visitor;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
+use serde::Serializer;
 
 /// Trait for retrieving a time from retry values.
 pub trait RetryWhen {
@@ -102,21 +107,23 @@ pub trait RetryWhen {
 /// The following is an example of a YAML configuration with all
 /// fields represented:
 /// ```yaml
-/// factor: 100
+/// factor: 100s
 /// exp-base: 2.0
 /// exp-factor: 1.0
 /// exp-rounds-cap: 20
 /// linear-factor: 1.0
 /// linear-rounds-cap: 50
-/// max-random: 100
-/// addend: 50
+/// max-random: 100s
+/// addend: 50s
 /// ```
 #[derive(Clone, Debug, Deserialize, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "kebab-case")]
 #[serde(default)]
 pub struct Retry {
     /// Scaling factor multiplied by both exponential and linear components.
-    factor: usize,
+    #[serde(deserialize_with = "Retry::deserialize_time")]
+    #[serde(serialize_with = "Retry::serialize_time")]
+    factor: Duration,
     /// Base of the exponent.
     exp_base: f32,
     /// Factor by which to multiply the exponent.
@@ -130,9 +137,13 @@ pub struct Retry {
     linear_rounds_cap: Option<usize>,
     /// Maximum random value to which to add to the result of
     /// exponentiation.
-    max_random: usize,
+    #[serde(deserialize_with = "Retry::deserialize_time")]
+    #[serde(serialize_with = "Retry::serialize_time")]
+    max_random: Duration,
     /// Constant base addend.
-    addend: usize
+    #[serde(deserialize_with = "Retry::deserialize_time")]
+    #[serde(serialize_with = "Retry::serialize_time")]
+    addend: Duration
 }
 
 /// A return type for non-blocking functions that can indicate a delay.
@@ -145,45 +156,47 @@ pub enum RetryResult<T, R: RetryWhen = Instant> {
     Retry(R)
 }
 
+struct RetryVisitor;
+
 impl Default for Retry {
     #[inline]
     fn default() -> Retry {
         Retry {
-            factor: 100,
+            factor: Duration::from_micros(100),
             exp_base: 2.0,
             exp_factor: 1.0,
             exp_rounds_cap: 20,
             linear_factor: 0.0,
             linear_rounds_cap: None,
-            addend: 0,
-            max_random: 100
+            addend: Duration::ZERO,
+            max_random: Duration::from_micros(100)
         }
     }
 }
 
 impl Retry {
-    /// Default `Retry` parameters for resubmitting large object
-    /// transfers on normal terrestrial networks.
-    pub const TERRESTRIAL_LARGE_OBJ_RESUB_DEFAULT: Retry = Retry {
-        factor: 300000000,
-        exp_base: 2.0,
-        exp_factor: 1.0,
-        exp_rounds_cap: 20,
-        linear_factor: 0.0,
-        linear_rounds_cap: None,
-        addend: 0,
-        max_random: 100000
-    };
     /// Default `Retry` parameters for normal terrestrial networks.
     pub const TERRESTRIAL_NETWORK_DEFAULT: Retry = Retry {
-        factor: 100000,
+        factor: Duration::from_millis(100),
         exp_base: 2.0,
         exp_factor: 1.0,
         exp_rounds_cap: 20,
         linear_factor: 0.0,
         linear_rounds_cap: None,
-        addend: 0,
-        max_random: 100000
+        addend: Duration::ZERO,
+        max_random: Duration::from_millis(100)
+    };
+    /// Default `Retry` parameters for resubmitting large object
+    /// transfers on normal terrestrial networks.
+    pub const TERRESTRIAL_NETWORK_RESUBMIT_DEFAULT: Retry = Retry {
+        factor: Duration::from_secs(30),
+        exp_base: 2.0,
+        exp_factor: 1.0,
+        exp_rounds_cap: 20,
+        linear_factor: 0.0,
+        linear_rounds_cap: None,
+        addend: Duration::ZERO,
+        max_random: Duration::from_secs(30)
     };
 
     /// Create a new `Retry` from its components.
@@ -197,32 +210,35 @@ impl Retry {
     /// function and parsing a YAML configuration:
     ///
     /// ```
+    /// # use std::time::Duration;
     /// # use constellation_common::retry::Retry;
     /// #
-    /// let yaml = concat!("factor: 100\n",
+    /// let yaml = concat!("factor: 10s\n",
     ///                    "exp-base: 2.0\n",
     ///                    "exp-factor: 1.0\n",
     ///                    "exp-rounds-cap: 20\n",
     ///                    "linear-factor: 1.0\n",
     ///                    "linear-rounds-cap: 50\n",
-    ///                    "max-random: 100\n",
-    ///                    "addend: 50\n");
+    ///                    "max-random: 10s\n",
+    ///                    "addend: 50ms\n");
     ///
     /// assert_eq!(
-    ///     Retry::new(100, 2.0, 1.0, 20, 1.0, Some(50), 100, 50),
+    ///     Retry::new(Duration::from_secs(10), 2.0, 1.0, 20,
+    ///                1.0, Some(50), Duration::from_secs(10),
+    ///                Duration::from_millis(50)),
     ///     serde_yaml::from_str(yaml).unwrap()
     /// );
     /// ```
     #[inline]
     pub fn new(
-        factor: usize,
+        factor: Duration,
         exp_base: f32,
         exp_factor: f32,
         exp_rounds_cap: usize,
         linear_factor: f32,
         linear_rounds_cap: Option<usize>,
-        max_random: usize,
-        addend: usize
+        max_random: Duration,
+        addend: Duration
     ) -> Self {
         Retry {
             factor: factor,
@@ -247,13 +263,206 @@ impl Retry {
             Some(cap) => min(n, cap) as f32,
             None => n as f32
         };
-        let random = thread_rng().gen_range(0..self.max_random);
-        let duration = (self.exp_base.powf(exponent) * (self.factor as f32)) +
-            (linear_round * self.linear_factor * (self.factor as f32)) +
-            (random as f32) +
-            (self.addend as f32);
+        let random = thread_rng().gen_range(0..self.max_random.as_micros());
+        let random = Duration::from_micros(random as u64);
 
-        Duration::from_micros(duration.max(0.0) as u64)
+        self.factor.mul_f32(self.exp_base.powf(exponent)) +
+            self.factor.mul_f32(linear_round * self.linear_factor) +
+            random +
+            self.addend
+    }
+
+    fn serialize_time<S>(
+        time: &Duration,
+        ser: S
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer {
+        let mut out = String::new();
+
+        if time.as_secs() != 0 {
+            let mut secs = time.as_secs();
+            let years = secs / (60 * 60 * 24 * 365);
+
+            if years != 0 {
+                out.push_str(&format!("{}y", years));
+
+                secs -= years * 60 * 60 * 24 * 365;
+            }
+
+            let weeks = secs / (60 * 60 * 24 * 7);
+
+            if weeks != 0 {
+                if out.is_empty() {
+                    out.push_str(&format!("{}w", weeks))
+                } else {
+                    out.push_str(&format!(" {}w", weeks))
+                }
+
+                secs -= weeks * 60 * 60 * 24 * 7;
+            }
+
+            let days = secs / (60 * 60 * 24);
+
+            if days != 0 {
+                if out.is_empty() {
+                    out.push_str(&format!("{}d", days))
+                } else {
+                    out.push_str(&format!(" {}d", days))
+                }
+
+                secs -= days * 60 * 60 * 24;
+            }
+
+            let hours = secs / (60 * 60);
+
+            if hours != 0 {
+                if out.is_empty() {
+                    out.push_str(&format!("{}h", hours))
+                } else {
+                    out.push_str(&format!(" {}h", hours))
+                }
+
+                secs -= days * 60 * 60;
+            }
+
+            let mins = secs / 60;
+
+            if mins != 0 {
+                if out.is_empty() {
+                    out.push_str(&format!("{}m", mins))
+                } else {
+                    out.push_str(&format!(" {}m", mins))
+                }
+
+                secs -= mins * 60;
+            }
+
+            if secs != 0 {
+                if out.is_empty() {
+                    out.push_str(&format!("{}m", mins))
+                } else {
+                    out.push_str(&format!(" {}m", mins))
+                }
+            }
+        }
+
+        let mut nanos = time.subsec_nanos();
+        let millis = nanos / (1000 * 1000);
+
+        if millis != 0 {
+            if out.is_empty() {
+                out.push_str(&format!("{}ms", millis))
+            } else {
+                out.push_str(&format!(" {}ms", millis))
+            }
+
+            nanos -= millis * 1000 * 1000;
+        }
+
+        let micros = nanos / 1000;
+
+        if micros != 0 {
+            if out.is_empty() {
+                out.push_str(&format!("{}us", micros))
+            } else {
+                out.push_str(&format!(" {}us", micros))
+            }
+
+            nanos -= millis * 1000;
+        }
+
+        if nanos != 0 {
+            if out.is_empty() {
+                out.push_str(&format!("{}ns", nanos))
+            } else {
+                out.push_str(&format!(" {}ns", nanos))
+            }
+        }
+
+        ser.serialize_str(&out)
+    }
+
+    #[inline]
+    fn deserialize_time<'de, D>(de: D) -> Result<Duration, D::Error>
+    where
+        D: Deserializer<'de> {
+        de.deserialize_str(RetryVisitor)
+    }
+}
+
+impl Visitor<'_> for RetryVisitor {
+    type Value = Duration;
+
+    #[inline]
+    fn expecting(
+        &self,
+        f: &mut Formatter<'_>
+    ) -> Result<(), Error> {
+        f.write_str("a string containing times")
+    }
+
+    fn visit_str<E>(
+        self,
+        s: &str
+    ) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error {
+        let mut out = Duration::ZERO;
+
+        for s in s.split(' ') {
+            let time = if let Some(idx) =
+                s.find(|c| char::is_ascii_alphabetic(&c))
+            {
+                let (num, suffix) = s.split_at(idx);
+
+                match (num.parse(), suffix) {
+                    (Ok(num), "ns") => Ok(Duration::from_nanos(num)),
+                    (Ok(num), "us") => Ok(Duration::from_micros(num)),
+                    (Ok(num), "ms") => Ok(Duration::from_millis(num)),
+                    (Ok(num), "s" | "sec") => Ok(Duration::from_secs(num)),
+                    (Ok(num), "m" | "min") => {
+                        let secs = num * 60;
+
+                        Ok(Duration::from_secs(secs))
+                    }
+                    (Ok(num), "h" | "hr") => {
+                        let secs = num * 60 * 60;
+
+                        Ok(Duration::from_secs(secs))
+                    }
+                    (Ok(num), "d") => {
+                        let secs = num * 60 * 60 * 24;
+
+                        Ok(Duration::from_secs(secs))
+                    }
+                    (Ok(num), "w" | "wk") => {
+                        let secs = num * 60 * 60 * 24 * 7;
+
+                        Ok(Duration::from_secs(secs))
+                    }
+                    (Ok(num), "y" | "yr") => {
+                        let secs = num * 60 * 60 * 24 * 365;
+
+                        Ok(Duration::from_secs(secs))
+                    }
+                    (Ok(_), unit) => {
+                        Err(E::custom(format!("invalid time unit {}", unit)))
+                    }
+                    (Err(err), _) => Err(E::custom(err.to_string()))
+                }
+            } else {
+                Err(E::custom(format!("invalid time specifier {}", s)))
+            }?;
+
+            out += time
+        }
+
+        if out != Duration::ZERO {
+            Ok(out)
+        } else {
+            Err(E::custom("no time amounts specified"))
+        }
     }
 }
 

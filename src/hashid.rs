@@ -56,15 +56,30 @@ pub trait HashID: Sized {
 
 /// Trait for specific cryptographic hash algorithms.
 pub trait HashAlgo {
+    /// Type of [HashID]s produced by this `HashAlgo`.
     type HashID: HashID;
 
+    /// Get the length of a hash in bytes.
     fn hash_len(&self) -> usize;
 
+    /// Convert raw bytes representing a hash back into a
+    /// [HashID](HashAlgo::HashID).
+    ///
+    /// This does *not* hash the bytes.
+    ///
+    /// # Parameters
+    ///
+    /// * `bytes`: Raw bytes representing the hash value.
     fn wrap_hashed_bytes(
         &self,
         bytes: &[u8]
     ) -> Result<Self::HashID, TryFromSliceError>;
 
+    /// Compute the hash of a stream of bytes.
+    ///
+    /// # Parameters
+    ///
+    /// * `bytes`: Iterator producing one or more byte slices (`&[u8]`s).
     fn hash_bytes<'a, I>(
         &self,
         bytes: I
@@ -72,11 +87,23 @@ pub trait HashAlgo {
     where
         I: Iterator<Item = &'a [u8]>;
 
+    /// Get the hash of a zero-length bytestream.
     #[inline]
     fn null_hash(&self) -> Self::HashID {
         self.hash_bytes(empty())
     }
 
+    /// Compute the hash of an object's encoding.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `T`: The type being encoded.
+    /// * `C`: The type of [Encoder] to use to encode `T`.
+    ///
+    /// # Parameters
+    ///
+    /// * `codec`: The [Encoder] to use to produce the byte representation.
+    /// * `val`: The value to encode.
     fn hashid<T, C>(
         &self,
         codec: &mut C,

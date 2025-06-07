@@ -145,16 +145,36 @@ pub enum ErrorScope {
     Retryable
 }
 
+/// Common type used to indicate mutex poisoning.
 #[derive(Debug)]
 pub struct MutexPoison;
 
+/// Common type used to indicate mutex poisoning in addition to
+/// another error type.
+///
+/// This is often used for shared wrappers around inner
+/// implementations with their own associated error types.
+///
+/// # Type Parameters
+///
+/// * `Error`: Type of inner errors.
 #[derive(Debug)]
 pub enum WithMutexPoison<Error> {
-    Inner { error: Error },
+    /// The inner error type occurred.
+    Inner {
+        /// The inner error that occurred.
+        err: Error
+    },
+    /// Mutex was poisoned.
     MutexPoison
 }
 
-/// Errors that can occur when sending a message.
+/// Errors that can occur when sending/receiving while using a codec.
+///
+/// # Type Parameters
+///
+/// * `Codec`: Type of codec-level errors.
+/// * `IO`: Type of errors that occur while sending/receiving.
 pub enum CodecStreamError<Codec, IO> {
     /// Error occurred when encoding or decoding the message.
     Codec {
@@ -292,7 +312,7 @@ where
     #[inline]
     fn scope(&self) -> ErrorScope {
         match self {
-            WithMutexPoison::Inner { error } => error.scope(),
+            WithMutexPoison::Inner { err } => err.scope(),
             WithMutexPoison::MutexPoison => ErrorScope::Unrecoverable
         }
     }
@@ -327,7 +347,7 @@ where
         f: &mut Formatter<'_>
     ) -> Result<(), std::fmt::Error> {
         match self {
-            WithMutexPoison::Inner { error } => error.fmt(f),
+            WithMutexPoison::Inner { err } => err.fmt(f),
             WithMutexPoison::MutexPoison => write!(f, "mutex poisoned")
         }
     }

@@ -36,20 +36,38 @@ pub mod per;
 
 use crate::error::ScopedError;
 
-/// Trait for encoding/decoding logic on types to datagrams.
+/// Trait for encoding/decoding logic from types to datagrams of
+/// constant size.
+///
+/// This only provides the [MAX_BYTES](DatagramCodec::MAX_BYTES)
+/// constant; actual encoding/decoding logic is provided by [Encoder]
+/// and [Decoder].
+///
+/// # Type Parameters
+///
+/// * `T`: The type represented in messages.
 pub trait DatagramCodec<T> {
     /// Maximum message size.
     const MAX_BYTES: usize;
 }
 
+/// Trait for encoding logic from `T` to a datagram message format.
+///
+/// # Type Parameters
+///
+/// * `T`: The type represented in messages.
 pub trait Encoder<T> {
     /// Errors that can occur when encoding.
     type EncodeError: Display + ScopedError;
 
-    /// Get a safe size for buffers for [encode](Codec::encode)ing
+    /// Get a safe size for buffers for [encode](Encoder::encode)ing
     /// `val`.
     ///
     /// This can return a size larger than needed.
+    ///
+    /// # Parameters
+    ///
+    /// * `val`: Value to be encoded.
     fn buf_size(
         &self,
         val: &T
@@ -59,6 +77,11 @@ pub trait Encoder<T> {
     ///
     /// The slice `buf` must contain at least
     /// [MAX_BYTES](DatagramCodec::MAX_BYTES) bytes.
+    ///
+    /// # Parameters
+    ///
+    /// * `val`: Value to be encoded.
+    /// * `buf`: Buffer into which to encode.
     fn encode(
         &mut self,
         val: &T,
@@ -66,6 +89,10 @@ pub trait Encoder<T> {
     ) -> Result<usize, Self::EncodeError>;
 
     /// Encode `val` to a newly-allocated [Vec].
+    ///
+    /// # Parameters
+    ///
+    /// * `val`: Value to be encoded.
     fn encode_to_vec(
         &mut self,
         val: &T
@@ -78,6 +105,12 @@ pub trait Encoder<T> {
     }
 }
 
+/// Trait for decoding logic from a datagram message format to a
+/// `T`.
+///
+/// # Type Parameters
+///
+/// * `T`: The type represented in messages.
 pub trait Decoder<T> {
     /// Errors that can occur when decoding.
     type DecodeError: Display + ScopedError;
@@ -86,6 +119,10 @@ pub trait Decoder<T> {
     ///
     /// The slice `buf` must contain at least
     /// [MAX_BYTES](DatagramCodec::MAX_BYTES) bytes.
+    ///
+    /// # Parameters
+    ///
+    /// * `buf`: Buffer from which to decode.
     fn decode(
         &mut self,
         buf: &[u8]
