@@ -23,6 +23,8 @@ use std::fmt::Formatter;
 use std::io::Error;
 use std::io::IoSlice;
 use std::io::IoSliceMut;
+use std::io::Read;
+use std::io::Write;
 use std::marker::PhantomData;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
@@ -39,6 +41,30 @@ use serde::Serializer;
 
 use crate::config::CreateArg;
 use crate::error::ScopedError;
+
+pub trait Negotiator<Stream>
+where
+    Stream: Read + Write {
+    type Outcome;
+    type State<'a>: Negotiation<'a, Self::Outcome>
+    where
+        Self: 'a;
+    type StartError: Display + ScopedError;
+
+    fn start(
+        &self,
+        stream: Stream
+    ) -> Result<Self::State<'_>, Self::StartError>;
+}
+
+/// State of an ongoing negotiation.
+pub trait Negotiation<'a, Outcome> {
+    /// Errors that can occur during negotiations.
+    type NegotiateError: Display;
+
+    /// Perform negotiations.
+    fn negotiate(self) -> Result<Outcome, Self::NegotiateError>;
+}
 
 /// Trait for sources of messages to be sent over a private channel.
 pub trait PrivateMsgs<Msg> {
