@@ -28,6 +28,7 @@
 //! * It allows more precise control over the exact message formats.
 //!
 //! * It facilitates the use of encoding formats such as ASN.1 PER.
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Read;
 use std::io::Write;
@@ -58,7 +59,7 @@ pub trait DatagramCodec<T> {
 /// * `T`: The type represented in messages.
 pub trait Encoder<T> {
     /// Errors that can occur when encoding.
-    type EncodeError: Display + ScopedError;
+    type EncodeError: Debug + Display + ScopedError;
 
     /// Get a safe size for buffers for [encode](Encoder::encode)ing
     /// `val`.
@@ -113,7 +114,7 @@ pub trait Encoder<T> {
 /// * `T`: The type represented in messages.
 pub trait Decoder<T> {
     /// Errors that can occur when decoding.
-    type DecodeError: Display + ScopedError;
+    type DecodeError: Debug + Display + ScopedError;
 
     /// Decode a message into `buf` and return the number of bytes consumed.
     ///
@@ -130,7 +131,7 @@ pub trait Decoder<T> {
 }
 
 pub trait BytestreamEncoder<T> {
-    type StreamEncodeError: Display + ScopedError;
+    type StreamEncodeError: Debug + Display + ScopedError;
 
     fn encode_to_stream<W>(
         &mut self,
@@ -142,7 +143,7 @@ pub trait BytestreamEncoder<T> {
 }
 
 pub trait BytestreamDecoder<T> {
-    type StreamDecodeError: Display + ScopedError;
+    type StreamDecodeError: Debug + Display + ScopedError;
 
     fn decode_from_stream<R>(
         &mut self,

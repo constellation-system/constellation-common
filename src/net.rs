@@ -18,6 +18,7 @@
 
 //! Common traits for network communications.
 use std::convert::Infallible;
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::io::Error;
@@ -49,7 +50,7 @@ where
     type State<'a>: Negotiation<'a, Self::Outcome>
     where
         Self: 'a;
-    type StartError: Display + ScopedError;
+    type StartError: Debug + Display + ScopedError;
 
     fn start(
         &self,
@@ -60,7 +61,7 @@ where
 /// State of an ongoing negotiation.
 pub trait Negotiation<'a, Outcome> {
     /// Errors that can occur during negotiations.
-    type NegotiateError: Display;
+    type NegotiateError: Debug + Display;
 
     /// Perform negotiations.
     fn negotiate(self) -> Result<Outcome, Self::NegotiateError>;
@@ -69,7 +70,7 @@ pub trait Negotiation<'a, Outcome> {
 /// Trait for sources of messages to be sent over a private channel.
 pub trait PrivateMsgs<Msg> {
     /// Type of errors that can occur when collecting messages.
-    type MsgsError: Display + ScopedError;
+    type MsgsError: Debug + Display + ScopedError;
 
     /// Collect and report outbound messages.
     ///
@@ -83,7 +84,7 @@ pub trait PrivateMsgs<Msg> {
 /// Trait for sources of messages to be sent over a shared channel.
 pub trait SharedMsgs<Party, Msg> {
     /// Type of errors that can occur when collecting messages.
-    type MsgsError: Display + ScopedError;
+    type MsgsError: Debug + Display + ScopedError;
 
     /// Collect and report outbound messages.
     ///
@@ -103,7 +104,7 @@ pub trait SharedMsgs<Party, Msg> {
 /// like low-level sockets, which will typically be thin wrappers
 /// around Unix datagram or UDP sockets.
 pub trait Socket: Send + Sync {
-    type Addr: Clone + Display + Eq;
+    type Addr: Clone + Debug + Display + Eq;
 
     /// Get the local socket address.
     ///
@@ -233,12 +234,12 @@ pub trait Receiver: Socket {
 /// encapsulation protocol.
 pub trait DatagramXfrm {
     /// Errors that can occur wrapping or unwrapping mesages.
-    type Error: Display;
+    type Error: Debug + Display;
     /// Errors that can occur getting the header size;
-    type SizeError: Display;
+    type SizeError: Debug + Display;
     /// Type of peer addresses.
-    type PeerAddr: Clone + Display + Eq + Send;
-    type LocalAddr: Clone + Display + Eq + Send;
+    type PeerAddr: Clone + Debug + Display + Eq + Send;
+    type LocalAddr: Clone + Debug + Display + Eq + Send;
 
     /// Get the header size for sending a message to `addr`.
     fn header_size(
@@ -316,7 +317,7 @@ pub trait DatagramXfrmCreateParam: DatagramXfrm {
     /// Type of parameters that are obtained.
     type Param;
     /// Errors that can occur recovering parameters.
-    type ParamError: Display + ScopedError;
+    type ParamError: Debug + Display + ScopedError;
 
     /// Recover the [DatagramXfrm] creation parameters from this
     /// instance together with a socket.
@@ -401,6 +402,49 @@ pub struct IPEndpoint {
 #[derive(Clone, Eq, Debug, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PassthruDatagramXfrmParam;
 
+pub struct PassthruNegotiator;
+
+pub struct PassthruSessionNegotiation<Outcome> {
+    outcome: Outcome
+}
+
+impl<Outcome> From<Outcome> for PassthruSessionNegotiation<Outcome> {
+    #[inline]
+    fn from(
+        val: Outcome
+    ) -> PassthruSessionNegotiation<Outcome> {
+        PassthruSessionNegotiation {
+            outcome: val
+        }
+    }
+}
+
+impl<Stream> Negotiator<Stream> for PassthruNegotiator
+where
+    Stream: Read + Write {
+    type Outcome = Stream;
+    type State<'a> = PassthruSessionNegotiation<Stream>;
+    type StartError = Infallible;
+
+    fn start(
+        &self,
+        stream: Stream
+    ) -> Result<Self::State<'_>, Self::StartError> {
+        Ok(PassthruSessionNegotiation {
+            outcome: stream
+        })
+    }
+}
+
+impl<Stream> Negotiation<'_, Stream> for PassthruSessionNegotiation<Stream> {
+    type NegotiateError = Infallible;
+
+    #[inline]
+    fn negotiate(self) -> Result<Stream, Self::NegotiateError> {
+        Ok(self.outcome)
+    }
+}
+
 impl Default for PassthruDatagramXfrmParam {
     #[inline]
     fn default() -> Self {
@@ -431,7 +475,7 @@ impl<Addr> Default for PassthruDatagramXfrm<Addr> {
 
 impl<Addr> DatagramXfrm for PassthruDatagramXfrm<Addr>
 where
-    Addr: Clone + Display + Eq + Send
+    Addr: Clone + Debug + Display + Eq + Send
 {
     type Error = Infallible;
     type LocalAddr = Addr;
@@ -494,7 +538,7 @@ where
 
 impl<Addr> DatagramXfrmCreate for PassthruDatagramXfrm<Addr>
 where
-    Addr: Clone + Display + Eq + Send
+    Addr: Clone + Debug + Display + Eq + Send
 {
     type Addr = Addr;
     type CreateParam = PassthruDatagramXfrmParam;
@@ -645,8 +689,8 @@ impl Display for IPEndpointAddr {
         f: &mut Formatter
     ) -> Result<(), std::fmt::Error> {
         match self {
-            IPEndpointAddr::Addr(addr) => addr.fmt(f),
-            IPEndpointAddr::Name(name) => name.fmt(f)
+            IPEndpointAddr::Addr(addr) => write!(f, "{}", addr),
+            IPEndpointAddr::Name(name) => write!(f, "{}", name),
         }
     }
 }

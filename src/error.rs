@@ -175,6 +175,7 @@ pub enum WithMutexPoison<Error> {
 ///
 /// * `Codec`: Type of codec-level errors.
 /// * `IO`: Type of errors that occur while sending/receiving.
+#[derive(Debug)]
 pub enum CodecStreamError<Codec, IO> {
     /// Error occurred when encoding or decoding the message.
     Codec {

@@ -28,6 +28,7 @@ pub mod pki;
 // pub mod signing;
 
 use std::convert::TryFrom;
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Error;
 use std::fmt::Formatter;
@@ -41,14 +42,14 @@ use crate::version::Version;
 use crate::version::VersionRange;
 
 pub trait Create: Sized {
-    type CreateError: Display;
+    type CreateError: Debug + Display;
     type Config;
 
     fn create(config: Self::Config) -> Result<Self, Self::CreateError>;
 }
 
 pub trait CreateArg: Sized {
-    type CreateError: Display;
+    type CreateError: Debug + Display;
     type Config;
     type Arg;
 
