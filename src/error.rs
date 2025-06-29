@@ -19,6 +19,7 @@
 //! Common functionality for errors and error-handling.
 use std::cmp::Ordering;
 use std::convert::Infallible;
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::io::ErrorKind;
@@ -27,6 +28,27 @@ use asn1rs::io::per::err::Error;
 use log::error;
 #[cfg(feature = "openssl")]
 use openssl::ssl::HandshakeError;
+
+/// Type for errors that may or may not represent recoverable
+/// conditions.
+///
+/// A prime example of this is [std::io::Error], which includes a
+/// number of non-recoverable conditions, but also includes
+/// [Interrupted](ErrorKind::Interrupted) and
+/// [WouldBlock](ErrorKind::WouldBlock).
+///
+/// This trait represents the splitting portion of this process.
+pub trait RecoverableError: Sized {
+    /// Type of permanent errors.
+    ///
+    /// These represent conditions that cannot be recovered from.
+    type Permanent: Debug + Display + ScopedError;
+    /// Type of errors that can be retried.
+    type Completable;
+
+    /// Project this into a completable and permanent portion.
+    fn split(self) -> (Option<Self::Completable>, Option<Self::Permanent>);
+}
 
 /// Errors that have a known scope.
 ///
@@ -237,6 +259,29 @@ impl PartialOrd for ErrorScope {
         other: &Self
     ) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+impl RecoverableError for Infallible {
+    type Completable = Infallible;
+    type Permanent = Infallible;
+
+    #[inline]
+    fn split(self) -> (Option<Self::Completable>, Option<Self::Permanent>) {
+        (None, Some(self))
+    }
+}
+
+impl RecoverableError for std::io::Error {
+    type Completable = ();
+    type Permanent = std::io::Error;
+
+    #[inline]
+    fn split(self) -> (Option<Self::Completable>, Option<Self::Permanent>) {
+        match self.kind() {
+            ErrorKind::WouldBlock | ErrorKind::Interrupted => (Some(()), None),
+            _ => (None, Some(self))
+        }
     }
 }
 
