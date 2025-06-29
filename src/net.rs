@@ -410,29 +410,24 @@ pub struct PassthruSessionNegotiation<Outcome> {
 
 impl<Outcome> From<Outcome> for PassthruSessionNegotiation<Outcome> {
     #[inline]
-    fn from(
-        val: Outcome
-    ) -> PassthruSessionNegotiation<Outcome> {
-        PassthruSessionNegotiation {
-            outcome: val
-        }
+    fn from(val: Outcome) -> PassthruSessionNegotiation<Outcome> {
+        PassthruSessionNegotiation { outcome: val }
     }
 }
 
 impl<Stream> Negotiator<Stream> for PassthruNegotiator
 where
-    Stream: Read + Write {
+    Stream: Read + Write
+{
     type Outcome = Stream;
-    type State<'a> = PassthruSessionNegotiation<Stream>;
     type StartError = Infallible;
+    type State<'a> = PassthruSessionNegotiation<Stream>;
 
     fn start(
         &self,
         stream: Stream
     ) -> Result<Self::State<'_>, Self::StartError> {
-        Ok(PassthruSessionNegotiation {
-            outcome: stream
-        })
+        Ok(PassthruSessionNegotiation { outcome: stream })
     }
 }
 
@@ -690,7 +685,7 @@ impl Display for IPEndpointAddr {
     ) -> Result<(), std::fmt::Error> {
         match self {
             IPEndpointAddr::Addr(addr) => write!(f, "{}", addr),
-            IPEndpointAddr::Name(name) => write!(f, "{}", name),
+            IPEndpointAddr::Name(name) => write!(f, "{}", name)
         }
     }
 }
