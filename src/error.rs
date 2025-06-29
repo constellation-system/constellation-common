@@ -262,6 +262,32 @@ impl PartialOrd for ErrorScope {
     }
 }
 
+impl<Encode, Write> RecoverableError for CodecStreamError<Encode, Write>
+where
+    Encode: Debug + Display,
+    Write: RecoverableError
+{
+    type Completable = CodecStreamError<Infallible, Write::Completable>;
+    type Permanent = CodecStreamError<Encode, Write::Permanent>;
+
+    #[inline]
+    fn split(self) -> (Option<Self::Completable>, Option<Self::Permanent>) {
+        match self {
+            CodecStreamError::Codec { err } => {
+                (None, Some(CodecStreamError::Codec { err }))
+            }
+            CodecStreamError::IO { err } => {
+                let (completable, permanent) = err.split();
+
+                (
+                    completable.map(|res| CodecStreamError::IO { err: res }),
+                    permanent.map(|res| CodecStreamError::IO { err: res })
+                )
+            }
+        }
+    }
+}
+
 impl RecoverableError for Infallible {
     type Completable = Infallible;
     type Permanent = Infallible;
