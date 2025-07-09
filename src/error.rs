@@ -28,6 +28,8 @@ use asn1rs::io::per::err::Error;
 use log::error;
 #[cfg(feature = "openssl")]
 use openssl::ssl::HandshakeError;
+#[cfg(feature = "openssl")]
+use openssl::ssl::MidHandshakeSslStream;
 
 /// Type for errors that may or may not represent recoverable
 /// conditions.
@@ -311,6 +313,24 @@ impl RecoverableError for std::io::Error {
     }
 }
 
+#[cfg(feature = "openssl")]
+impl<S> RecoverableError for HandshakeError<S> {
+    type Completable = MidHandshakeSslStream<S>;
+    type Permanent = openssl::ssl::Error;
+
+    fn split(self) -> (Option<Self::Completable>, Option<Self::Permanent>) {
+        match self {
+            HandshakeError::SetupFailure(stack) => {
+                (None, Some(openssl::ssl::Error::from(stack)))
+            }
+            HandshakeError::Failure(stream) => {
+                (None, Some(stream.into_error()))
+            }
+            HandshakeError::WouldBlock(stream) => (Some(stream), None)
+        }
+    }
+}
+
 impl ScopedError for std::io::Error {
     fn scope(&self) -> ErrorScope {
         match self.kind() {
@@ -354,6 +374,14 @@ impl ScopedError for Error {
     #[inline]
     fn scope(&self) -> ErrorScope {
         ErrorScope::Msg
+    }
+}
+
+#[cfg(feature = "openssl")]
+impl ScopedError for openssl::ssl::Error {
+    fn scope(&self) -> ErrorScope {
+        // XXX Actually do this properly
+        ErrorScope::External
     }
 }
 
