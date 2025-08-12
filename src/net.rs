@@ -41,29 +41,28 @@ use serde::Serialize;
 use serde::Serializer;
 
 use crate::config::CreateArg;
-use crate::error::RecoverableError;
 use crate::error::ScopedError;
 
-pub trait Negotiator {
-    type Outcome;
+pub trait Negotiator<Outcome> {
     type State;
+    type Pending;
     /// Errors that can occur during negotiations.
-    type NegotiateError: Debug + Display + RecoverableError;
+    type NegotiateError: Debug + Display;
 
     /// Perform negotiations.
     fn negotiate(
         &self,
         state: Self::State
-    ) -> Result<Self::Outcome, Self::NegotiateError>;
+    ) -> Result<NegotiatorResult<Outcome, Self::Pending>, Self::NegotiateError>;
 
     /// Complete a failed negotiation.
     fn complete_negotiate(
         &self,
-        err: <Self::NegotiateError as RecoverableError>::Completable
-    ) -> Result<Self::Outcome, Self::NegotiateError>;
+        err: Self::Pending
+    ) -> Result<NegotiatorResult<Outcome, Self::Pending>, Self::NegotiateError>;
 }
 
-pub trait NegotiatorStart<Stream>: Negotiator
+pub trait NegotiatorStart<Outcome, Stream>: Negotiator<Outcome>
 where
     Stream: Read + Write {
     type StartError: Debug + Display + ScopedError;
@@ -334,6 +333,14 @@ pub trait DatagramXfrmCreateParam: DatagramXfrm {
     ) -> Result<Self::Param, Self::ParamError>;
 }
 
+/// Result from a [Negotiator].
+pub enum NegotiatorResult<Complete, Pending> {
+    /// Negotiations are complete.
+    Complete(Complete),
+    /// Negotiations are still pending.
+    Pending(Pending)
+}
+
 /// This is a [DatagramXfrm] that does no transformation on the
 /// messages.
 ///
@@ -409,9 +416,8 @@ pub struct IPEndpoint {
 #[derive(Clone, Eq, Debug, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PassthruDatagramXfrmParam;
 
-pub struct PassthruNegotiator<Stream> {
-    stream: PhantomData<Stream>
-}
+#[derive(Clone, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct PassthruNegotiator;
 
 pub struct PassthruSessionNegotiation<Outcome> {
     outcome: Outcome
@@ -424,44 +430,34 @@ impl<Outcome> From<Outcome> for PassthruSessionNegotiation<Outcome> {
     }
 }
 
-impl<Stream> Default for PassthruNegotiator<Stream>
-where
-    Stream: Read + Write
-{
-    #[inline]
-    fn default() -> Self {
-        PassthruNegotiator {
-            stream: PhantomData
-        }
-    }
-}
-
-impl<Stream> Negotiator for PassthruNegotiator<Stream>
+impl<Stream> Negotiator<Stream> for PassthruNegotiator
 where
     Stream: Read + Write
 {
     type NegotiateError = Infallible;
-    type Outcome = Stream;
+    type Pending = Infallible;
     type State = PassthruSessionNegotiation<Stream>;
 
     #[inline]
     fn negotiate(
         &self,
         state: PassthruSessionNegotiation<Stream>
-    ) -> Result<Stream, Self::NegotiateError> {
-        Ok(state.outcome)
+    ) -> Result<NegotiatorResult<Stream, Self::Pending>, Self::NegotiateError>
+    {
+        Ok(NegotiatorResult::Complete(state.outcome))
     }
 
     #[inline]
     fn complete_negotiate(
         &self,
         _err: Infallible
-    ) -> Result<Stream, Self::NegotiateError> {
+    ) -> Result<NegotiatorResult<Stream, Self::Pending>, Self::NegotiateError>
+    {
         panic!("This should never be called!")
     }
 }
 
-impl<Stream> NegotiatorStart<Stream> for PassthruNegotiator<Stream>
+impl<Stream> NegotiatorStart<Stream, Stream> for PassthruNegotiator
 where
     Stream: Read + Write
 {
