@@ -221,6 +221,38 @@ impl ClientGSSAPIConfig {
         }
     }
 
+    /// Get the client principal name, if one is specified.
+    #[inline]
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// Get the expected service principal name, if one is specified.
+    #[inline]
+    pub fn service(&self) -> Option<&str> {
+        self.service.as_deref()
+    }
+
+    #[inline]
+    pub fn set_service(
+        &mut self,
+        service: String
+    ) {
+        self.service = Some(service)
+    }
+
+    /// The time for which to request credentials.
+    #[inline]
+    pub fn time_req(&self) -> Option<Duration> {
+        self.time_req
+    }
+
+    /// Get the security level.
+    #[inline]
+    pub fn security(&self) -> &GSSAPISecurity {
+        &self.security
+    }
+
     /// Decompose this `ClientGSSAPIConfig` into its components.
     ///
     /// The components returned, in order are:
@@ -242,30 +274,6 @@ impl ClientGSSAPIConfig {
         GSSAPISecurity
     ) {
         (self.name, self.service, self.time_req, self.security)
-    }
-
-    /// Get the client principal name, if one is specified.
-    #[inline]
-    pub fn name(&self) -> Option<&str> {
-        self.name.as_deref()
-    }
-
-    /// Get the expected service principal name, if one is specified.
-    #[inline]
-    pub fn service(&self) -> Option<&str> {
-        self.service.as_deref()
-    }
-
-    /// The time for which to request credentials.
-    #[inline]
-    pub fn time_req(&self) -> Option<Duration> {
-        self.time_req
-    }
-
-    /// Get the security level.
-    #[inline]
-    pub fn security(&self) -> &GSSAPISecurity {
-        &self.security
     }
 }
 

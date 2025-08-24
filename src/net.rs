@@ -21,6 +21,7 @@ use std::convert::Infallible;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::hash::Hash;
 use std::io::Error;
 use std::io::IoSlice;
 use std::io::IoSliceMut;
@@ -65,10 +66,12 @@ pub trait Negotiator<Outcome> {
 pub trait NegotiatorStart<Outcome, Stream>: Negotiator<Outcome>
 where
     Stream: Read + Write {
+    type Param;
     type StartError: Debug + Display + ScopedError;
 
     fn start(
         &self,
+        param: &Self::Param,
         stream: Stream
     ) -> Result<Self::State, Self::StartError>;
 }
@@ -209,24 +212,6 @@ pub trait Receiver: Socket {
         &self,
         bufs: &mut [IoSliceMut<'_>]
     ) -> Result<(usize, Self::Addr, Option<Self::MsgCred>), Error>;
-
-    /// Examine a pending message without consuming it.
-    ///
-    /// This reads the next pending message into `buf`, returning the
-    /// number of bytes received and the address of the counterparty
-    /// that sent the message.
-    ///
-    /// If the size of the message exceeds the space available in
-    /// `buf`, the remaining bytes will be dropped.
-    ///
-    /// The counterparty address is generally able to be spoofed and
-    /// cannot establish identity, unless the underlying socket
-    /// implementation guarantees it.  See
-    /// [allow_session_addr_creds](Socket::allow_session_addr_creds).
-    fn peek_from(
-        &self,
-        buf: &mut [u8]
-    ) -> Result<(usize, Self::Addr), Error>;
 }
 
 /// Transformations based on a mutable context that can be done on messages.
@@ -244,8 +229,8 @@ pub trait DatagramXfrm {
     /// Errors that can occur getting the header size;
     type SizeError: Debug + Display;
     /// Type of peer addresses.
-    type PeerAddr: Clone + Debug + Display + Eq + Send;
-    type LocalAddr: Clone + Debug + Display + Eq + Send;
+    type PeerAddr: Clone + Debug + Display + Hash + Eq + Send;
+    type LocalAddr: Clone + Debug + Display + Hash + Eq + Send;
 
     /// Get the header size for sending a message to `addr`.
     fn header_size(
@@ -461,11 +446,13 @@ impl<Stream> NegotiatorStart<Stream, Stream> for PassthruNegotiator
 where
     Stream: Read + Write
 {
+    type Param = ();
     type StartError = Infallible;
 
     #[inline]
     fn start(
         &self,
+        _param: &(),
         stream: Stream
     ) -> Result<Self::State, Self::StartError> {
         Ok(PassthruSessionNegotiation { outcome: stream })
@@ -502,7 +489,7 @@ impl<Addr> Default for PassthruDatagramXfrm<Addr> {
 
 impl<Addr> DatagramXfrm for PassthruDatagramXfrm<Addr>
 where
-    Addr: Clone + Debug + Display + Eq + Send
+    Addr: Clone + Debug + Display + Eq + Hash + Send
 {
     type Error = Infallible;
     type LocalAddr = Addr;
@@ -565,7 +552,7 @@ where
 
 impl<Addr> DatagramXfrmCreate for PassthruDatagramXfrm<Addr>
 where
-    Addr: Clone + Debug + Display + Eq + Send
+    Addr: Clone + Debug + Display + Eq + Hash + Send
 {
     type Addr = Addr;
     type CreateParam = PassthruDatagramXfrmParam;
@@ -698,6 +685,179 @@ impl IPEndpoint {
     #[inline]
     pub fn port(&self) -> u16 {
         self.port
+    }
+}
+
+impl<T, R> NegotiatorResult<T, R> {
+    /// Apply a mapping function to the success result.
+    #[inline]
+    pub fn map<F, S>(
+        self,
+        f: F
+    ) -> NegotiatorResult<S, R>
+    where
+        F: FnOnce(T) -> S {
+        match self {
+            NegotiatorResult::Complete(val) =>
+                NegotiatorResult::Complete(f(val)),
+            NegotiatorResult::Pending(pending) =>
+                NegotiatorResult::Pending(pending)
+        }
+    }
+
+    /// Apply a mapping function to the pending result.
+    #[inline]
+    pub fn map_pending<F, Q>(
+        self,
+        f: F
+    ) -> NegotiatorResult<T, Q>
+    where
+        F: FnOnce(R) -> Q {
+        match self {
+            NegotiatorResult::Complete(val) =>
+                NegotiatorResult::Complete(val),
+            NegotiatorResult::Pending(pending) =>
+                NegotiatorResult::Pending(f(pending))
+        }
+    }
+
+    /// Apply an error-producing mapping function to the success result.
+    #[inline]
+    pub fn map_ok<F, S, E>(
+        self,
+        f: F
+    ) -> Result<NegotiatorResult<S, R>, E>
+    where
+        F: FnOnce(T) -> Result<S, E> {
+        match self {
+            NegotiatorResult::Complete(val) =>
+                Ok(NegotiatorResult::Complete(f(val)?)),
+            NegotiatorResult::Pending(pending) =>
+                Ok(NegotiatorResult::Pending(pending))
+        }
+    }
+
+    /// Apply an error-producing mapping function to the pending result.
+    #[inline]
+    pub fn map_pending_ok<F, Q, E>(
+        self,
+        f: F
+    ) -> Result<NegotiatorResult<T, Q>, E>
+    where
+        F: FnOnce(R) -> Result<Q, E> {
+        match self {
+            NegotiatorResult::Complete(val) =>
+                Ok(NegotiatorResult::Complete(val)),
+            NegotiatorResult::Pending(pending) =>
+                Ok(NegotiatorResult::Pending(f(pending)?))
+        }
+    }
+
+    /// Apply a mapping function to the success result.
+    #[inline]
+    pub fn flat_map<F, S>(
+        self,
+        f: F
+    ) -> NegotiatorResult<S, R>
+    where
+        F: FnOnce(T) -> NegotiatorResult<S, R> {
+        match self {
+            NegotiatorResult::Complete(val) => f(val),
+            NegotiatorResult::Pending(pending) =>
+                NegotiatorResult::Pending(pending)
+        }
+    }
+
+    /// Apply a mapping function to the pending result.
+    #[inline]
+    pub fn flat_map_pending<F, Q>(
+        self,
+        f: F
+    ) -> NegotiatorResult<T, Q>
+    where
+        F: FnOnce(R) -> NegotiatorResult<T, Q> {
+        match self {
+            NegotiatorResult::Complete(val) => NegotiatorResult::Complete(val),
+            NegotiatorResult::Pending(pending) => f(pending)
+        }
+    }
+
+    /// Apply an error-producing mapping function to the success result.
+    #[inline]
+    pub fn flat_map_ok<F, S, E>(
+        self,
+        f: F
+    ) -> Result<NegotiatorResult<S, R>, E>
+    where
+        F: FnOnce(T) -> Result<NegotiatorResult<S, R>, E> {
+        match self {
+            NegotiatorResult::Complete(val) => f(val),
+            NegotiatorResult::Pending(pending) =>
+                Ok(NegotiatorResult::Pending(pending))
+        }
+    }
+
+    /// Apply an error-producing mapping function to the pending result.
+    #[inline]
+    pub fn flat_map_pending_ok<F, Q, E>(
+        self,
+        f: F
+    ) -> Result<NegotiatorResult<T, Q>, E>
+    where
+        F: FnOnce(R) -> Result<NegotiatorResult<T, Q>, E> {
+        match self {
+            NegotiatorResult::Complete(val) =>
+                Ok(NegotiatorResult::Complete(val)),
+            NegotiatorResult::Pending(pending) => f(pending)
+        }
+    }
+
+    /// Apply a function to the success result.
+    #[inline]
+    pub fn app<F>(
+        self,
+        f: F
+    ) where
+        F: FnOnce(T) {
+        if let NegotiatorResult::Complete(val) = self {
+            f(val)
+        }
+    }
+
+    /// Apply a function to the pending result.
+    #[inline]
+    pub fn app_pending<F>(
+        self,
+        f: F
+    ) where
+        F: FnOnce(R) {
+        if let NegotiatorResult::Pending(pending) = self {
+            f(pending)
+        }
+    }
+
+    /// Apply a function to the success result.
+    #[inline]
+    pub fn inspect<F>(
+        &self,
+        f: F
+    ) where
+        F: FnOnce(&T) {
+        if let NegotiatorResult::Complete(val) = self {
+            f(val)
+        }
+    }
+
+    /// Apply a function to the pending result.
+    #[inline]
+    pub fn inspect_pending<F>(
+        &self,
+        f: F
+    ) where
+        F: FnOnce(&R) {
+        if let NegotiatorResult::Pending(pending) = self {
+            f(pending)
+        }
     }
 }
 

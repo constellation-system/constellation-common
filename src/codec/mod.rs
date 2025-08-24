@@ -30,11 +30,13 @@
 //! * It facilitates the use of encoding formats such as ASN.1 PER.
 use std::fmt::Debug;
 use std::fmt::Display;
+use std::fmt::Formatter;
 use std::io::Read;
 use std::io::Write;
 
 pub mod per;
 
+use crate::error::ErrorScope;
 use crate::error::ScopedError;
 
 /// Trait for encoding/decoding logic from types to datagrams of
@@ -151,4 +153,133 @@ pub trait BytestreamDecoder<T> {
     ) -> Result<(T, usize), Self::StreamDecodeError>
     where
         R: Read;
+}
+
+/// Simple [Encoder]/[Decoder] instance for a `usize`.
+///
+/// This is intended primarily for testing.
+pub struct USizeCodec;
+
+/// Simple [Encoder]/[Decoder] instance for a `isize`.
+///
+/// This is intended primarily for testing.
+pub struct ISizeCodec;
+
+#[derive(Debug)]
+pub struct TooShort;
+
+impl Decoder<usize> for USizeCodec {
+    type DecodeError = TooShort;
+
+    fn decode(
+        &mut self,
+        buf: &[u8]
+    ) -> Result<(usize, usize), Self::DecodeError> {
+        let size = (usize::BITS / 8) as usize;
+
+        if size <= buf.len() {
+            let mut data = [0; (usize::BITS / 8) as usize];
+
+            data.copy_from_slice(&buf[..size]);
+
+            Ok((usize::from_le_bytes(data), size))
+        } else {
+            Err(TooShort)
+        }
+    }
+}
+
+impl Decoder<isize> for ISizeCodec {
+    type DecodeError = TooShort;
+
+    fn decode(
+        &mut self,
+        buf: &[u8]
+    ) -> Result<(isize, usize), Self::DecodeError> {
+        let size = (isize::BITS / 8) as usize;
+
+        if size <= buf.len() {
+            let mut data = [0; (isize::BITS / 8) as usize];
+
+            data.copy_from_slice(&buf[..size]);
+
+            Ok((isize::from_le_bytes(data), size))
+        } else {
+            Err(TooShort)
+        }
+    }
+}
+
+impl Encoder<usize> for USizeCodec {
+    type EncodeError = TooShort;
+
+    #[inline]
+    fn buf_size(
+        &self,
+        _val: &usize
+    ) -> usize {
+        (usize::BITS / 8) as usize
+    }
+
+    #[inline]
+    fn encode(
+        &mut self,
+        val: &usize,
+        buf: &mut [u8]
+    ) -> Result<usize, Self::EncodeError> {
+        let size = self.buf_size(val);
+
+        if size <= buf.len() {
+            buf.copy_from_slice(&val.to_le_bytes());
+
+            Ok(size)
+        } else {
+            Err(TooShort)
+        }
+    }
+}
+
+impl Encoder<isize> for ISizeCodec {
+    type EncodeError = TooShort;
+
+    #[inline]
+    fn buf_size(
+        &self,
+        _val: &isize
+    ) -> usize {
+        (isize::BITS / 8) as usize
+    }
+
+    #[inline]
+    fn encode(
+        &mut self,
+        val: &isize,
+        buf: &mut [u8]
+    ) -> Result<usize, Self::EncodeError> {
+        let size = self.buf_size(val);
+
+        if size <= buf.len() {
+            buf.copy_from_slice(&val.to_le_bytes());
+
+            Ok(size)
+        } else {
+            Err(TooShort)
+        }
+    }
+}
+
+impl ScopedError for TooShort {
+    #[inline]
+    fn scope(&self) -> ErrorScope {
+        ErrorScope::Unrecoverable
+    }
+}
+
+impl Display for TooShort {
+    fn fmt(
+        &self,
+        f: &mut Formatter<'_>
+    ) -> Result<(), std::fmt::Error> {
+        write!(f, "buffer is too small")
+    }
 }
