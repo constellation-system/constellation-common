@@ -698,10 +698,12 @@ impl<T, R> NegotiatorResult<T, R> {
     where
         F: FnOnce(T) -> S {
         match self {
-            NegotiatorResult::Complete(val) =>
-                NegotiatorResult::Complete(f(val)),
-            NegotiatorResult::Pending(pending) =>
+            NegotiatorResult::Complete(val) => {
+                NegotiatorResult::Complete(f(val))
+            }
+            NegotiatorResult::Pending(pending) => {
                 NegotiatorResult::Pending(pending)
+            }
         }
     }
 
@@ -714,10 +716,10 @@ impl<T, R> NegotiatorResult<T, R> {
     where
         F: FnOnce(R) -> Q {
         match self {
-            NegotiatorResult::Complete(val) =>
-                NegotiatorResult::Complete(val),
-            NegotiatorResult::Pending(pending) =>
+            NegotiatorResult::Complete(val) => NegotiatorResult::Complete(val),
+            NegotiatorResult::Pending(pending) => {
                 NegotiatorResult::Pending(f(pending))
+            }
         }
     }
 
@@ -730,10 +732,12 @@ impl<T, R> NegotiatorResult<T, R> {
     where
         F: FnOnce(T) -> Result<S, E> {
         match self {
-            NegotiatorResult::Complete(val) =>
-                Ok(NegotiatorResult::Complete(f(val)?)),
-            NegotiatorResult::Pending(pending) =>
+            NegotiatorResult::Complete(val) => {
+                Ok(NegotiatorResult::Complete(f(val)?))
+            }
+            NegotiatorResult::Pending(pending) => {
                 Ok(NegotiatorResult::Pending(pending))
+            }
         }
     }
 
@@ -746,10 +750,12 @@ impl<T, R> NegotiatorResult<T, R> {
     where
         F: FnOnce(R) -> Result<Q, E> {
         match self {
-            NegotiatorResult::Complete(val) =>
-                Ok(NegotiatorResult::Complete(val)),
-            NegotiatorResult::Pending(pending) =>
+            NegotiatorResult::Complete(val) => {
+                Ok(NegotiatorResult::Complete(val))
+            }
+            NegotiatorResult::Pending(pending) => {
                 Ok(NegotiatorResult::Pending(f(pending)?))
+            }
         }
     }
 
@@ -763,8 +769,9 @@ impl<T, R> NegotiatorResult<T, R> {
         F: FnOnce(T) -> NegotiatorResult<S, R> {
         match self {
             NegotiatorResult::Complete(val) => f(val),
-            NegotiatorResult::Pending(pending) =>
+            NegotiatorResult::Pending(pending) => {
                 NegotiatorResult::Pending(pending)
+            }
         }
     }
 
@@ -792,8 +799,9 @@ impl<T, R> NegotiatorResult<T, R> {
         F: FnOnce(T) -> Result<NegotiatorResult<S, R>, E> {
         match self {
             NegotiatorResult::Complete(val) => f(val),
-            NegotiatorResult::Pending(pending) =>
+            NegotiatorResult::Pending(pending) => {
                 Ok(NegotiatorResult::Pending(pending))
+            }
         }
     }
 
@@ -806,8 +814,9 @@ impl<T, R> NegotiatorResult<T, R> {
     where
         F: FnOnce(R) -> Result<NegotiatorResult<T, Q>, E> {
         match self {
-            NegotiatorResult::Complete(val) =>
-                Ok(NegotiatorResult::Complete(val)),
+            NegotiatorResult::Complete(val) => {
+                Ok(NegotiatorResult::Complete(val))
+            }
             NegotiatorResult::Pending(pending) => f(pending)
         }
     }
