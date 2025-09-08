@@ -677,7 +677,7 @@ impl IPEndpoint {
 
     /// Get the [IPEndpointAddr] component.
     #[inline]
-    pub fn ip_endpoint(&self) -> &IPEndpointAddr {
+    pub fn ip_addr(&self) -> &IPEndpointAddr {
         &self.addr
     }
 
@@ -875,7 +875,7 @@ impl Display for IPEndpoint {
         &self,
         f: &mut Formatter
     ) -> Result<(), std::fmt::Error> {
-        write!(f, "{}:{}", self.ip_endpoint(), self.port())
+        write!(f, "{}:{}", self.ip_addr(), self.port())
     }
 }
 

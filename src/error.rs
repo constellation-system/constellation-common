@@ -429,6 +429,24 @@ impl<S> ScopedError for HandshakeError<S> {
     }
 }
 
+impl Display for ErrorScope {
+    fn fmt(
+        &self,
+        f: &mut Formatter<'_>
+    ) -> Result<(), std::fmt::Error> {
+        match self {
+            ErrorScope::Retryable => write!(f, "retryable"),
+            ErrorScope::Msg => write!(f, "message"),
+            ErrorScope::Batch => write!(f, "batch"),
+            ErrorScope::Session => write!(f, "session"),
+            ErrorScope::External => write!(f, "external"),
+            ErrorScope::System => write!(f, "system"),
+            ErrorScope::Shutdown => write!(f, "shutdown"),
+            ErrorScope::Unrecoverable => write!(f, "unrecoverable")
+        }
+    }
+}
+
 impl Display for MutexPoison {
     fn fmt(
         &self,
