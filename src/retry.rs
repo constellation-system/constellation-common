@@ -177,14 +177,14 @@ impl Default for Retry {
 impl Retry {
     /// Default `Retry` parameters for normal terrestrial networks.
     pub const TERRESTRIAL_NETWORK_DEFAULT: Retry = Retry {
-        factor: Duration::from_millis(100),
+        factor: Duration::from_millis(500),
         exp_base: 2.0,
         exp_factor: 1.0,
         exp_rounds_cap: 20,
         linear_factor: 0.0,
         linear_rounds_cap: None,
         addend: Duration::ZERO,
-        max_random: Duration::from_millis(100)
+        max_random: Duration::from_millis(500)
     };
     /// Default `Retry` parameters for resubmitting large object
     /// transfers on normal terrestrial networks.
@@ -272,7 +272,7 @@ impl Retry {
             self.addend
     }
 
-    fn serialize_time<S>(
+    pub fn serialize_time<S>(
         time: &Duration,
         ser: S
     ) -> Result<S::Ok, S::Error>
@@ -384,7 +384,7 @@ impl Retry {
     }
 
     #[inline]
-    fn deserialize_time<'de, D>(de: D) -> Result<Duration, D::Error>
+    pub fn deserialize_time<'de, D>(de: D) -> Result<Duration, D::Error>
     where
         D: Deserializer<'de> {
         de.deserialize_str(RetryVisitor)

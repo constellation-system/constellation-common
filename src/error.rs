@@ -162,11 +162,15 @@ pub enum ErrorScope {
     /// The error is temporary in nature, and the operation can be retried.
     ///
     /// This is associated with errors such as
-    /// [WouldBlock](ErrorKind::WouldBlock),
     /// [TimedOut](ErrorKind::TimedOut), and
     /// [Interrupted](ErrorKind::Interrupted).  These should generally
     /// not be reported, except as debug messages.
-    Retryable
+    Retryable,
+    /// The error denotes end of input in a nonblocking I/O setting.
+    ///
+    /// This is associated with [WouldBlock](ErrorKind::WouldBlock).
+    /// This should generally not be reported.
+    WouldBlock
 }
 
 /// Common type used to indicate mutex poisoning.
@@ -249,6 +253,8 @@ impl Ord for ErrorScope {
             (ErrorScope::External, ErrorScope::External) => Ordering::Equal,
             (ErrorScope::External, _) => Ordering::Greater,
             (_, ErrorScope::External) => Ordering::Less,
+            (ErrorScope::WouldBlock, _) => Ordering::Greater,
+            (_, ErrorScope::WouldBlock) => Ordering::Less,
             (ErrorScope::Retryable, ErrorScope::Retryable) => Ordering::Equal
         }
     }
@@ -353,8 +359,8 @@ impl ScopedError for std::io::Error {
                 ErrorScope::External
             }
             ErrorKind::Interrupted |
-            ErrorKind::WouldBlock |
             ErrorKind::TimedOut => ErrorScope::Retryable,
+            ErrorKind::WouldBlock => ErrorScope::WouldBlock,
             _ => ErrorScope::Unrecoverable
         }
     }
@@ -424,7 +430,7 @@ impl<S> ScopedError for HandshakeError<S> {
         match self {
             HandshakeError::SetupFailure(_) => ErrorScope::System,
             HandshakeError::Failure(_) => ErrorScope::External,
-            HandshakeError::WouldBlock(_) => ErrorScope::Retryable
+            HandshakeError::WouldBlock(_) => ErrorScope::WouldBlock
         }
     }
 }
@@ -436,6 +442,7 @@ impl Display for ErrorScope {
     ) -> Result<(), std::fmt::Error> {
         match self {
             ErrorScope::Retryable => write!(f, "retryable"),
+            ErrorScope::WouldBlock => write!(f, "would block"),
             ErrorScope::Msg => write!(f, "message"),
             ErrorScope::Batch => write!(f, "batch"),
             ErrorScope::Session => write!(f, "session"),

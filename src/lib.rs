@@ -52,6 +52,7 @@ pub mod sched;
 pub mod shutdown;
 pub mod sync;
 pub mod version;
+pub mod unix;
 
 #[cfg(test)]
 use std::sync::Once;

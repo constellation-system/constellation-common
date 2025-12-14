@@ -37,12 +37,32 @@ use std::net::SocketAddrV6;
 use std::str::FromStr;
 use std::time::Instant;
 
+use mio::net::TcpStream;
+use mio::net::UnixStream;
 use serde::Deserialize;
 use serde::Serialize;
 use serde::Serializer;
 
 use crate::config::CreateArg;
 use crate::error::ScopedError;
+use crate::unix::UnixSocketAddr;
+
+/// Trait for sessions with an individual peer address.
+///
+/// Implementors of this trait are also expected to implement [Read]
+/// and [Write].
+pub trait Session: Read + Write {
+    /// The type of local addresses.
+    type LocalAddr: Display;
+    /// The type of peer (remote) addresses.
+    type PeerAddr: Display;
+
+    /// Get the local address for this flow.
+    fn local_addr(&self) -> Result<Self::LocalAddr, Error>;
+
+    /// Get the peer (remote) address for this flow.
+    fn peer_addr(&self) -> Result<Self::PeerAddr, Error>;
+}
 
 pub trait Negotiator<Outcome> {
     type State;
@@ -63,9 +83,7 @@ pub trait Negotiator<Outcome> {
     ) -> Result<NegotiatorResult<Outcome, Self::Pending>, Self::NegotiateError>;
 }
 
-pub trait NegotiatorStart<Outcome, Stream>: Negotiator<Outcome>
-where
-    Stream: Read + Write {
+pub trait NegotiatorStart<Outcome, Stream>: Negotiator<Outcome> {
     type Param;
     type StartError: Debug + Display + ScopedError;
 
@@ -404,6 +422,8 @@ pub struct PassthruDatagramXfrmParam;
 #[derive(Clone, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PassthruNegotiator;
 
+pub struct TrivialNegotiator;
+
 pub struct PassthruSessionNegotiation<Outcome> {
     outcome: Outcome
 }
@@ -412,6 +432,75 @@ impl<Outcome> From<Outcome> for PassthruSessionNegotiation<Outcome> {
     #[inline]
     fn from(val: Outcome) -> PassthruSessionNegotiation<Outcome> {
         PassthruSessionNegotiation { outcome: val }
+    }
+}
+
+impl Session for UnixStream {
+    type LocalAddr = UnixSocketAddr;
+    type PeerAddr = UnixSocketAddr;
+
+    #[inline]
+    fn local_addr(&self) -> Result<Self::LocalAddr, Error> {
+        self.local_addr().map(|addr| UnixSocketAddr::from(addr))
+    }
+
+    #[inline]
+    fn peer_addr(&self) -> Result<Self::PeerAddr, Error> {
+        self.peer_addr().map(|addr| UnixSocketAddr::from(addr))
+    }
+}
+
+impl Session for TcpStream {
+    type LocalAddr = SocketAddr;
+    type PeerAddr = SocketAddr;
+
+    #[inline]
+    fn local_addr(&self) -> Result<Self::LocalAddr, Error> {
+        self.local_addr()
+    }
+
+    #[inline]
+    fn peer_addr(&self) -> Result<Self::PeerAddr, Error> {
+        self.peer_addr()
+    }
+}
+
+impl Negotiator<()> for TrivialNegotiator {
+    type NegotiateError = Infallible;
+    type Pending = Infallible;
+    type State = ();
+
+    #[inline]
+    fn negotiate(
+        &self,
+        _state: ()
+    ) -> Result<NegotiatorResult<(), Self::Pending>, Self::NegotiateError> {
+        Ok(NegotiatorResult::Complete(()))
+    }
+
+    #[inline]
+    fn complete_negotiate(
+        &self,
+        _err: Infallible
+    ) -> Result<NegotiatorResult<(), Self::Pending>, Self::NegotiateError> {
+        panic!("This should never be called!")
+    }
+}
+
+impl<Stream> NegotiatorStart<(), Stream> for TrivialNegotiator
+where
+    Stream: Read + Write
+{
+    type Param = ();
+    type StartError = Infallible;
+
+    #[inline]
+    fn start(
+        &self,
+        _param: &(),
+        _stream: Stream
+    ) -> Result<Self::State, Self::StartError> {
+        Ok(())
     }
 }
 
