@@ -51,8 +51,8 @@ pub mod retry;
 pub mod sched;
 pub mod shutdown;
 pub mod sync;
-pub mod version;
 pub mod unix;
+pub mod version;
 
 #[cfg(test)]
 use std::sync::Once;

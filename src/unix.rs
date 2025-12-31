@@ -159,7 +159,9 @@ impl TryFrom<&'_ UnixSocketAddr> for UnixSocketPath {
 
     #[inline]
     fn try_from(val: &UnixSocketAddr) -> Result<UnixSocketPath, Error> {
-        let path = val.0.as_pathname()
+        let path = val
+            .0
+            .as_pathname()
             .ok_or(Error::new(ErrorKind::Other, "anonymous socket"))?;
 
         Ok(UnixSocketPath(path.to_owned()))
@@ -235,13 +237,13 @@ impl TryFrom<UnixSocketPath> for SocketAddr {
     }
 }
 
-
 impl TryFrom<&'_ SocketAddr> for UnixSocketPath {
     type Error = Error;
 
     #[inline]
     fn try_from(val: &SocketAddr) -> Result<UnixSocketPath, Error> {
-        let path = val.as_pathname()
+        let path = val
+            .as_pathname()
             .ok_or(Error::new(ErrorKind::Other, "anonymous socket address"))?;
 
         Ok(UnixSocketPath(path.to_owned()))
@@ -253,7 +255,8 @@ impl TryFrom<SocketAddr> for UnixSocketPath {
 
     #[inline]
     fn try_from(val: SocketAddr) -> Result<UnixSocketPath, Error> {
-        let path = val.as_pathname()
+        let path = val
+            .as_pathname()
             .ok_or(Error::new(ErrorKind::Other, "anonymous socket address"))?;
 
         Ok(UnixSocketPath(path.to_owned()))

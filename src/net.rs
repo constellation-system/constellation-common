@@ -504,10 +504,7 @@ where
     }
 }
 
-impl<Stream> Negotiator<Stream> for PassthruNegotiator
-where
-    Stream: Read + Write
-{
+impl<Stream> Negotiator<Stream> for PassthruNegotiator {
     type NegotiateError = Infallible;
     type Pending = Infallible;
     type State = PassthruSessionNegotiation<Stream>;
@@ -531,10 +528,7 @@ where
     }
 }
 
-impl<Stream> NegotiatorStart<Stream, Stream> for PassthruNegotiator
-where
-    Stream: Read + Write
-{
+impl<Stream> NegotiatorStart<Stream, Stream> for PassthruNegotiator {
     type Param = ();
     type StartError = Infallible;
 

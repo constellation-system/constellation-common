@@ -358,8 +358,9 @@ impl ScopedError for std::io::Error {
             ErrorKind::ConnectionRefused | ErrorKind::ConnectionAborted => {
                 ErrorScope::External
             }
-            ErrorKind::Interrupted |
-            ErrorKind::TimedOut => ErrorScope::Retryable,
+            ErrorKind::Interrupted | ErrorKind::TimedOut => {
+                ErrorScope::Retryable
+            }
             ErrorKind::WouldBlock => ErrorScope::WouldBlock,
             _ => ErrorScope::Unrecoverable
         }
