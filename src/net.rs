@@ -441,12 +441,12 @@ impl Session for UnixStream {
 
     #[inline]
     fn local_addr(&self) -> Result<Self::LocalAddr, Error> {
-        self.local_addr().map(|addr| UnixSocketAddr::from(addr))
+        self.local_addr().map(UnixSocketAddr::from)
     }
 
     #[inline]
     fn peer_addr(&self) -> Result<Self::PeerAddr, Error> {
-        self.peer_addr().map(|addr| UnixSocketAddr::from(addr))
+        self.peer_addr().map(UnixSocketAddr::from)
     }
 }
 

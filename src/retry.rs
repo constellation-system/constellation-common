@@ -156,6 +156,14 @@ pub enum RetryResult<T, R: RetryWhen = Instant> {
     Retry(R)
 }
 
+/// A retry time paired with an arbitrary value.
+pub struct WithRetryWhen<T> {
+    /// The retry time.
+    when: Instant,
+    /// The wrapped value.
+    val: T
+}
+
 struct RetryVisitor;
 
 impl Default for Retry {
@@ -658,6 +666,33 @@ where
             RetryResult::Success(_) => Instant::now(),
             RetryResult::Retry(retry) => retry.when()
         }
+    }
+}
+
+impl<T> WithRetryWhen<T> {
+    /// Create a `WithRetryWhen` from its components.
+    #[inline]
+    pub fn new(
+        val: T,
+        when: Instant
+    ) -> Self {
+        WithRetryWhen {
+            when: when,
+            val: val
+        }
+    }
+
+    /// Deconstruct a `WithRetryWhen` into its components.
+    #[inline]
+    pub fn take(self) -> (T, Instant) {
+        (self.val, self.when)
+    }
+}
+
+impl<T> RetryWhen for WithRetryWhen<T> {
+    #[inline]
+    fn when(&self) -> Instant {
+        self.when
     }
 }
 
