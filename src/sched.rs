@@ -49,6 +49,18 @@ pub trait History {
     /// Create a fresh history.
     fn new(config: &Self::Config) -> Self;
 
+    /// Check whether this item is active.
+    fn is_active(&self) -> bool {
+        true
+    }
+
+    /// Set whether or not this item is active.
+    fn set_active(
+        &mut self,
+        _active: bool
+    ) {
+    }
+
     /// Record a success.
     fn success(
         &mut self,
@@ -70,20 +82,11 @@ pub trait History {
     /// Get the number of retries.
     fn nretries(&self) -> usize;
 
-    /// Compute and cache the score, if applicable.
-    fn cache_score(
-        &mut self,
-        config: &Self::Config
-    );
-
-    // ISSUE #8: Technical debt item.  The need for this should be
-    // eliminated eventually.
-    fn clear_score_cache(&mut self);
-
     /// Get the score for this history.
     fn score(
         &self,
-        config: &Self::Config
+        config: &Self::Config,
+        now: Instant
     ) -> f32;
 }
 
@@ -231,11 +234,8 @@ pub enum RefreshError {
 /// Errors that can occur when selecting an item from the scheduler.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum SelectError {
-    /// No addresses are available.
-    ///
-    /// This is a fatal error, and should not occur in normal
-    /// operations.
-    Empty
+    /// Scheduler was uninitialized.
+    Uninit
 }
 
 impl ScopedError for RefreshError {
@@ -252,7 +252,7 @@ impl ScopedError for SelectError {
     #[inline]
     fn scope(&self) -> ErrorScope {
         match self {
-            SelectError::Empty => ErrorScope::Unrecoverable
+            SelectError::Uninit => ErrorScope::Unrecoverable
         }
     }
 }
@@ -349,6 +349,22 @@ where
         }
     }
 
+    #[inline]
+    fn is_active(&self) -> bool {
+        self.history.is_active()
+    }
+
+    fn cmp_actives(
+        &self,
+        other: &Self
+    ) -> Ordering {
+        match (self.history.is_active(), other.history.is_active()) {
+            (true, false) => Ordering::Less,
+            (false, true) => Ordering::Greater,
+            _ => Ordering::Equal
+        }
+    }
+
     fn cmp_last_use(
         &self,
         other: &Self
@@ -370,28 +386,6 @@ where
                 Ordering::Equal => self.cmp_last_use(other),
                 out => out
             }
-        }
-    }
-
-    fn cmp_scores(
-        &self,
-        config: &H::Config,
-        other: &Self
-    ) -> Ordering {
-        let self_score = self.history.score(config);
-        let other_score = other.history.score(config);
-
-        match self_score.partial_cmp(&other_score) {
-            // Note incomparable items.
-            None => {
-                error!(target: "addr-multiplex",
-                       concat!("failed to compare scores ",
-                               "{} and {}"),
-                       self_score, other_score);
-
-                Ordering::Equal
-            }
-            Some(out) => out
         }
     }
 }
@@ -423,7 +417,7 @@ where
                 ids.insert(items[i].0.clone(), i);
                 ordering.push(i);
             } else {
-                warn!(target: "scheduler",
+                warn!(target: "multi-sched",
                       "duplicate item {} in scheduler inputs",
                       items[i].0.clone())
             }
@@ -445,7 +439,7 @@ where
     ) -> Result<(), ReportError<Item>> {
         match self.ids.get_mut(item) {
             Some(idx) if origin == &self.items[*idx].1 => {
-                trace!(target: "scheduler",
+                trace!(target: "multi-sched",
                        "recording success for {}",
                        item);
                 let (_, _, record) = &mut self.items[*idx];
@@ -464,13 +458,43 @@ where
         &mut self,
         config: &H::Config,
         idx: usize
-    ) -> Result<(), ReportError<Item>> {
+    ) {
         let (_, _, record) = &mut self.items[idx];
 
         record.history.success(config);
         record.delay_until = None;
+    }
 
-        Ok(())
+    fn set_active(
+        &mut self,
+        item: &Item,
+        origin: &Origin,
+        active: bool
+    ) -> Result<(), ReportError<Item>> {
+        match self.ids.get_mut(item) {
+            Some(idx) if origin == &self.items[*idx].1 => {
+                trace!(target: "multi-sched",
+                       "setting {} to active = {}",
+                       item, active);
+                let (_, _, record) = &mut self.items[*idx];
+
+                record.history.set_active(active);
+
+                Ok(())
+            }
+            _ => Err(ReportError::BadItem { item: item.clone() })
+        }
+    }
+
+    #[inline]
+    fn set_active_id(
+        &mut self,
+        idx: usize,
+        active: bool
+    ) {
+        let (_, _, record) = &mut self.items[idx];
+
+        record.history.set_active(active);
     }
 
     /// Record a failure for `addr`.
@@ -483,7 +507,7 @@ where
     ) -> Result<(), ReportError<Item>> {
         match self.ids.get_mut(item) {
             Some(idx) if origin == &self.items[*idx].1 => {
-                trace!(target: "scheduler",
+                trace!(target: "multi-sched",
                        "recording failure for {}",
                        item);
                 let (_, _, record) = &mut self.items[*idx];
@@ -514,52 +538,88 @@ where
         Ok(())
     }
 
+    fn cmp_scores(
+        a: f32,
+        b: f32
+    ) -> Ordering {
+        match a.partial_cmp(&b) {
+            // Note incomparable items.
+            None => {
+                error!(target: "multi-sched",
+                       "failed to compare scores {} and {}",
+                       a, b);
+
+                Ordering::Equal
+            }
+            Some(out) => out
+        }
+    }
+
     fn fixup_ordering<P>(
-        &mut self,
+        items: &mut [(Item, Origin, Record<H>)],
+        ordering: &mut [usize],
         config: &H::Config,
         policy: &P
     ) where
         P: Policy<Item = Item> {
-        for (_, _, record) in &mut self.items {
-            record.history.cache_score(config)
-        }
-
-        // ISSUE #8: this needs to be eliminated.
-        let mut ordering = self.ordering.clone();
+        let mut scores = vec![None; items.len()];
+        let now = Instant::now();
 
         ordering.sort_unstable_by(|idx_a, idx_b| {
-            let (item_a, _, a) = &self.items[*idx_a];
-            let (item_b, _, b) = &self.items[*idx_b];
+            let (item_a, _, a) = &items[*idx_a];
+            let (item_b, _, b) = &items[*idx_b];
+            let a_score = match scores[*idx_a] {
+                Some(score) => score,
+                None => {
+                    let score = a.history.score(config, now);
 
-            match a.cmp_scores(config, b) {
-                // If scores are equal, look at the address preference.
-                Ordering::Equal => match policy.cmp_items(item_a, item_b) {
-                    Ordering::Equal => a.cmp_delays(b),
-                    out => out
+                    scores[*idx_a] = Some(score);
+
+                    score
+                }
+            };
+            let b_score = match scores[*idx_b] {
+                Some(score) => score,
+                None => {
+                    let score = b.history.score(config, now);
+
+                    scores[*idx_b] = Some(score);
+
+                    score
+                }
+            };
+
+            match a.cmp_actives(b) {
+                Ordering::Equal => match Self::cmp_scores(a_score, b_score) {
+                    // If scores are equal, look at the address preference.
+                    Ordering::Equal => match policy.cmp_items(item_a, item_b) {
+                        Ordering::Equal => a.cmp_delays(b),
+                        out => out
+                    },
+                    Ordering::Less => Ordering::Greater,
+                    Ordering::Greater => Ordering::Less
                 },
-                Ordering::Less => Ordering::Greater,
-                Ordering::Greater => Ordering::Less
+                out => out
             }
         });
-
-        for (_, _, record) in &mut self.items {
-            record.history.clear_score_cache()
-        }
-
-        self.ordering = ordering;
     }
 
     fn item<P>(
         &mut self,
         config: &H::Config,
         policy: &P
-    ) -> Result<RetryResult<(Item, Origin, usize)>, SelectError>
+    ) -> Option<RetryResult<(Item, Origin, usize)>>
     where
         P: Policy<Item = Item> {
         // The ordering array should always be nonzero, but check anyway.
         if !self.ordering.is_empty() {
             // Sort the active array
-            self.fixup_ordering(config, policy);
+            Self::fixup_ordering(
+                &mut self.items,
+                &mut self.ordering,
+                config,
+                policy
+            );
 
             let idx = self.ordering[0];
             let (item, origin, record) = &mut self.items[idx];
@@ -573,20 +633,24 @@ where
                         Some(until)
                     };
 
-                    (Ok(RetryResult::Retry(until)), new_until)
+                    (Some(RetryResult::Retry(until)), new_until)
                 }
                 // No delay record; the address is good to go.
                 None => {
-                    record.last_use = Instant::now();
+                    if record.is_active() {
+                        record.last_use = Instant::now();
 
-                    (
-                        Ok(RetryResult::Success((
-                            item.clone(),
-                            origin.clone(),
-                            idx
-                        ))),
-                        None
-                    )
+                        (
+                            Some(RetryResult::Success((
+                                item.clone(),
+                                origin.clone(),
+                                idx
+                            ))),
+                            None
+                        )
+                    } else {
+                        (None, None)
+                    }
                 }
             };
 
@@ -594,7 +658,7 @@ where
 
             out
         } else {
-            Err(SelectError::Empty)
+            None
         }
     }
 
@@ -616,9 +680,9 @@ where
                     }
                     // This shouldn't happen.
                     _ => {
-                        warn!(target: "scheduler",
-                               "duplicate entry for {}",
-                               item);
+                        warn!(target: "multi-sched",
+                              "duplicate entry for {}",
+                              item);
                     }
                 }
             } else {
@@ -658,7 +722,7 @@ where
                 ids.insert(items[i].0.clone(), i);
                 ordering.push(i);
             } else {
-                warn!(target: "scheduler",
+                warn!(target: "multi-sched",
                       "duplicate item {} in scheduler inputs",
                       items[i].0.clone())
             }
@@ -727,7 +791,7 @@ where
                     ids.insert(items[i].0.clone(), i);
                     ordering.push(i);
                 } else {
-                    warn!(target: "scheduler",
+                    warn!(target: "multi-sched",
                           "duplicate item {} in scheduler inputs",
                           items[i].0.clone())
                 }
@@ -751,7 +815,7 @@ where
             (added, removed)
         } else {
             // No change in the address set.
-            trace!(target: "scheduler",
+            trace!(target: "multi-sched",
                "got same set of multiple addresses");
 
             (None, None)
@@ -795,7 +859,6 @@ where
     }
 
     /// Record a success for `item`.
-    #[inline]
     pub fn success(
         &mut self,
         item: &P::Item,
@@ -814,7 +877,6 @@ where
         }
     }
 
-    #[inline]
     pub fn success_id(
         &mut self,
         id: &DenseItemID<Epochs::Item>
@@ -822,10 +884,55 @@ where
         if id.epoch == self.epoch {
             match &mut self.state {
                 SchedState::Multi { sched, .. } => {
-                    sched.success_id(&self.config, id.id)
+                    sched.success_id(&self.config, id.id);
+
+                    Ok(())
                 }
                 SchedState::Single { record, .. } => {
                     record.history.success(&self.config);
+
+                    Ok(())
+                }
+                SchedState::Uninit => Err(ReportError::Uninit)
+            }
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn set_active(
+        &mut self,
+        item: &P::Item,
+        origin: &Origin,
+        active: bool
+    ) -> Result<(), ReportError<P::Item>> {
+        match &mut self.state {
+            SchedState::Multi { sched, .. } => {
+                sched.set_active(item, origin, active)
+            }
+            SchedState::Single { record, .. } => {
+                record.history.set_active(active);
+
+                Ok(())
+            }
+            SchedState::Uninit => Err(ReportError::Uninit)
+        }
+    }
+
+    pub fn set_active_id(
+        &mut self,
+        id: &DenseItemID<Epochs::Item>,
+        active: bool
+    ) -> Result<(), ReportError<P::Item>> {
+        if id.epoch == self.epoch {
+            match &mut self.state {
+                SchedState::Multi { sched, .. } => {
+                    sched.set_active_id(id.id, active);
+
+                    Ok(())
+                }
+                SchedState::Single { record, .. } => {
+                    record.history.set_active(active);
 
                     Ok(())
                 }
@@ -1139,22 +1246,21 @@ where
     pub fn select(
         &mut self
     ) -> Result<
-        RetryResult<(P::Item, Origin, DenseItemID<Epochs::Item>)>,
+        Option<RetryResult<(P::Item, Origin, DenseItemID<Epochs::Item>)>>,
         SelectError
     > {
         match &mut self.state {
             SchedState::Multi { sched, .. } => {
-                match sched.item(&self.config, &self.policy)? {
-                    RetryResult::Retry(when) => Ok(RetryResult::Retry(when)),
-                    RetryResult::Success((item, origin, idx)) => {
+                Ok(sched.item(&self.config, &self.policy).map(|res| {
+                    res.map(|(item, origin, idx)| {
                         let dense = DenseItemID {
                             epoch: self.epoch.clone(),
                             id: idx
                         };
 
-                        Ok(RetryResult::Success((item, origin, dense)))
-                    }
-                }
+                        (item, origin, dense)
+                    })
+                }))
             }
             SchedState::Single {
                 record,
@@ -1162,40 +1268,44 @@ where
                 origin,
                 ..
             } => {
-                let (out, until) = match record.delay_until {
-                    // There's a delay recorded.
-                    Some(until) => {
-                        // Check to see if it's expired.
-                        let new_until = if until < Instant::now() {
-                            None
-                        } else {
-                            Some(until)
-                        };
+                if record.history.is_active() {
+                    let (out, until) = match record.delay_until {
+                        // There's a delay recorded.
+                        Some(until) => {
+                            // Check to see if it's expired.
+                            let new_until = if until < Instant::now() {
+                                None
+                            } else {
+                                Some(until)
+                            };
 
-                        (Ok(RetryResult::Retry(until)), new_until)
-                    }
-                    // No delay record; the address is good to go.
-                    None => {
-                        let dense = DenseItemID {
-                            epoch: self.epoch.clone(),
-                            id: 0
-                        };
-                        record.last_use = Instant::now();
+                            (Ok(Some(RetryResult::Retry(until))), new_until)
+                        }
+                        // No delay record; the address is good to go.
+                        None => {
+                            let dense = DenseItemID {
+                                epoch: self.epoch.clone(),
+                                id: 0
+                            };
+                            record.last_use = Instant::now();
 
-                        (
-                            Ok(RetryResult::Success((
-                                single.clone(),
-                                origin.clone(),
-                                dense
-                            ))),
-                            None
-                        )
-                    }
-                };
+                            (
+                                Ok(Some(RetryResult::Success((
+                                    single.clone(),
+                                    origin.clone(),
+                                    dense
+                                )))),
+                                None
+                            )
+                        }
+                    };
 
-                record.delay_until = until;
+                    record.delay_until = until;
 
-                out
+                    out
+                } else {
+                    Ok(None)
+                }
             }
             // This shouldn't happen.
             SchedState::Uninit => {
@@ -1203,7 +1313,7 @@ where
                        concat!("attempting to get item from ",
                                "uninitialized scheduler"));
 
-                Err(SelectError::Empty)
+                Err(SelectError::Uninit)
             }
         }
     }
@@ -1308,9 +1418,365 @@ impl Display for SelectError {
         f: &mut Formatter
     ) -> Result<(), Error> {
         match self {
-            SelectError::Empty => {
+            SelectError::Uninit => {
                 write!(f, "no valid items exist")
             }
         }
     }
+}
+
+#[cfg(test)]
+pub struct TestPolicy;
+
+#[cfg(test)]
+#[derive(Clone)]
+pub struct TestHistory {
+    active: bool,
+    nretries: usize,
+    score: f32
+}
+
+#[cfg(test)]
+impl Policy for TestPolicy {
+    type Item = usize;
+
+    fn cmp_items(
+        &self,
+        _a: &Self::Item,
+        _b: &Self::Item
+    ) -> Ordering {
+        Ordering::Equal
+    }
+
+    fn check(
+        &self,
+        _item: &Self::Item
+    ) -> bool {
+        false
+    }
+}
+
+#[cfg(test)]
+impl History for TestHistory {
+    type Config = f32;
+
+    fn new(config: &Self::Config) -> Self {
+        TestHistory {
+            active: true,
+            nretries: 0,
+            score: *config
+        }
+    }
+
+    fn is_active(&self) -> bool {
+        self.active
+    }
+
+    fn set_active(
+        &mut self,
+        active: bool
+    ) {
+        self.active = active;
+    }
+
+    fn success(
+        &mut self,
+        _config: &Self::Config
+    ) {
+        self.nretries = 0;
+        self.score += 1.0;
+    }
+
+    fn failure(
+        &mut self,
+        _config: &Self::Config
+    ) {
+        self.score -= 1.0;
+    }
+
+    fn retry(
+        &mut self,
+        _config: &Self::Config
+    ) {
+        self.nretries += 1;
+    }
+
+    fn nretries(&self) -> usize {
+        self.nretries
+    }
+
+    fn score(
+        &self,
+        _config: &Self::Config,
+        _now: Instant
+    ) -> f32 {
+        self.score
+    }
+}
+
+#[test]
+fn test_multi_sched_prefer_success() {
+    let now = Instant::now();
+    let config = 5.0;
+    let items: Vec<(usize, ())> = vec![(0, ()), (1, ())];
+    let mut sched = MultiSched::<usize, (), TestHistory>::new(
+        &config,
+        now,
+        items.into_iter()
+    );
+
+    sched.success(&config, &1, &()).expect("Expected success");
+
+    let res = sched.item(&config, &TestPolicy);
+
+    assert!(matches!(res, Some(RetryResult::Success((1, (), _)))));
+
+    let mut vec = Vec::with_capacity(sched.ordering.len());
+
+    for idx in sched.ordering.iter() {
+        vec.push(sched.items[*idx].0)
+    }
+
+    assert_eq!(vec, vec![1, 0])
+}
+
+#[test]
+fn test_multi_sched_prefer_more_success() {
+    let now = Instant::now();
+    let config = 5.0;
+    let items: Vec<(usize, ())> = vec![(0, ()), (1, ())];
+    let mut sched = MultiSched::<usize, (), TestHistory>::new(
+        &config,
+        now,
+        items.into_iter()
+    );
+
+    sched.success(&config, &1, &()).expect("Expected success");
+    sched.success(&config, &1, &()).expect("Expected success");
+    sched.success(&config, &0, &()).expect("Expected success");
+
+    let res = sched.item(&config, &TestPolicy);
+
+    assert!(matches!(res, Some(RetryResult::Success((1, (), _)))));
+
+    let mut vec = Vec::with_capacity(sched.ordering.len());
+
+    for idx in sched.ordering.iter() {
+        vec.push(sched.items[*idx].0)
+    }
+
+    assert_eq!(vec, vec![1, 0])
+}
+
+#[test]
+fn test_multi_sched_prefer_no_fail() {
+    let now = Instant::now();
+    let retry = Retry::default();
+    let config = 5.0;
+    let items: Vec<(usize, ())> = vec![(0, ()), (1, ())];
+    let mut sched = MultiSched::<usize, (), TestHistory>::new(
+        &config,
+        now,
+        items.into_iter()
+    );
+
+    sched
+        .failure(&config, &retry, &0, &())
+        .expect("Expected success");
+
+    let res = sched.item(&config, &TestPolicy);
+
+    assert!(matches!(res, Some(RetryResult::Success((1, (), _)))));
+
+    let mut vec = Vec::with_capacity(sched.ordering.len());
+
+    for idx in sched.ordering.iter() {
+        vec.push(sched.items[*idx].0)
+    }
+
+    assert_eq!(vec, vec![1, 0])
+}
+
+#[test]
+fn test_multi_sched_prefer_fewer_fail() {
+    let now = Instant::now();
+    let retry = Retry::default();
+    let config = 5.0;
+    let items: Vec<(usize, ())> = vec![(0, ()), (1, ())];
+    let mut sched = MultiSched::<usize, (), TestHistory>::new(
+        &config,
+        now,
+        items.into_iter()
+    );
+
+    sched
+        .failure(&config, &retry, &0, &())
+        .expect("Expected success");
+    sched
+        .failure(&config, &retry, &0, &())
+        .expect("Expected success");
+    sched
+        .failure(&config, &retry, &1, &())
+        .expect("Expected success");
+
+    let res = sched.item(&config, &TestPolicy);
+
+    assert!(matches!(res, Some(RetryResult::Retry(_))));
+
+    let mut vec = Vec::with_capacity(sched.ordering.len());
+
+    for idx in sched.ordering.iter() {
+        vec.push(sched.items[*idx].0)
+    }
+
+    assert_eq!(vec, vec![1, 0])
+}
+
+#[test]
+fn test_multi_sched_prefer_active_over_success() {
+    let now = Instant::now();
+    let config = 5.0;
+    let items: Vec<(usize, ())> = vec![(0, ()), (1, ())];
+    let mut sched = MultiSched::<usize, (), TestHistory>::new(
+        &config,
+        now,
+        items.into_iter()
+    );
+
+    sched.success(&config, &1, &()).expect("Expected success");
+    sched.set_active(&1, &(), false).expect("Expected success");
+
+    let res = sched.item(&config, &TestPolicy);
+
+    assert!(matches!(res, Some(RetryResult::Success((0, (), _)))));
+
+    let mut vec = Vec::with_capacity(sched.ordering.len());
+
+    for idx in sched.ordering.iter() {
+        vec.push(sched.items[*idx].0)
+    }
+
+    assert_eq!(vec, vec![0, 1])
+}
+
+#[test]
+fn test_multi_sched_prefer_active_over_more_success() {
+    let now = Instant::now();
+    let config = 5.0;
+    let items: Vec<(usize, ())> = vec![(0, ()), (1, ())];
+    let mut sched = MultiSched::<usize, (), TestHistory>::new(
+        &config,
+        now,
+        items.into_iter()
+    );
+
+    sched.success(&config, &1, &()).expect("Expected success");
+    sched.success(&config, &1, &()).expect("Expected success");
+    sched.success(&config, &0, &()).expect("Expected success");
+    sched.set_active(&1, &(), false).expect("Expected success");
+
+    let res = sched.item(&config, &TestPolicy);
+
+    assert!(matches!(res, Some(RetryResult::Success((0, (), _)))));
+
+    let mut vec = Vec::with_capacity(sched.ordering.len());
+
+    for idx in sched.ordering.iter() {
+        vec.push(sched.items[*idx].0)
+    }
+
+    assert_eq!(vec, vec![0, 1])
+}
+
+#[test]
+fn test_multi_sched_prefer_active_over_no_fail() {
+    let now = Instant::now();
+    let retry = Retry::default();
+    let config = 5.0;
+    let items: Vec<(usize, ())> = vec![(0, ()), (1, ())];
+    let mut sched = MultiSched::<usize, (), TestHistory>::new(
+        &config,
+        now,
+        items.into_iter()
+    );
+
+    sched
+        .failure(&config, &retry, &0, &())
+        .expect("Expected success");
+    sched.set_active(&1, &(), false).expect("Expected success");
+
+    let res = sched.item(&config, &TestPolicy);
+
+    assert!(matches!(res, Some(RetryResult::Retry(_))));
+
+    let mut vec = Vec::with_capacity(sched.ordering.len());
+
+    for idx in sched.ordering.iter() {
+        vec.push(sched.items[*idx].0)
+    }
+
+    assert_eq!(vec, vec![0, 1])
+}
+
+#[test]
+fn test_multi_sched_prefer_active_over_fewer_fail() {
+    let now = Instant::now();
+    let retry = Retry::default();
+    let config = 5.0;
+    let items: Vec<(usize, ())> = vec![(0, ()), (1, ())];
+    let mut sched = MultiSched::<usize, (), TestHistory>::new(
+        &config,
+        now,
+        items.into_iter()
+    );
+
+    sched
+        .failure(&config, &retry, &0, &())
+        .expect("Expected success");
+    sched
+        .failure(&config, &retry, &0, &())
+        .expect("Expected success");
+    sched
+        .failure(&config, &retry, &1, &())
+        .expect("Expected success");
+    sched.set_active(&1, &(), false).expect("Expected success");
+
+    let res = sched.item(&config, &TestPolicy);
+
+    assert!(matches!(res, Some(RetryResult::Retry(_))));
+
+    let mut vec = Vec::with_capacity(sched.ordering.len());
+
+    for idx in sched.ordering.iter() {
+        vec.push(sched.items[*idx].0)
+    }
+
+    assert_eq!(vec, vec![0, 1])
+}
+
+#[test]
+fn test_multi_sched_no_actives() {
+    let now = Instant::now();
+    let config = 5.0;
+    let items: Vec<(usize, ())> = vec![(0, ()), (1, ())];
+    let mut sched = MultiSched::<usize, (), TestHistory>::new(
+        &config,
+        now,
+        items.into_iter()
+    );
+
+    sched.set_active(&0, &(), false).expect("Expected success");
+    sched.set_active(&1, &(), false).expect("Expected success");
+
+    let res = sched.item(&config, &TestPolicy);
+
+    assert!(matches!(res, None));
+
+    let mut vec = Vec::with_capacity(sched.ordering.len());
+
+    for idx in sched.ordering.iter() {
+        vec.push(sched.items[*idx].0)
+    }
+
+    assert_eq!(vec, vec![0, 1])
 }
