@@ -156,6 +156,20 @@ pub enum RetryResult<T, R: RetryWhen = Instant> {
     Retry(R)
 }
 
+/// A return type for non-blocking functions that can indicate a
+/// possibly indefinite delay.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum RetryIndefResult<T, R: RetryWhen = Instant, I = ()> {
+    /// An immediate result.
+    Success(T),
+    /// Indication that the call should be retried at a point in the
+    /// future.
+    Retry(R),
+    /// Indication that the call should be retried after some
+    /// condition has been met.
+    Indef(I)
+}
+
 /// A retry time paired with an arbitrary value.
 pub struct WithRetryWhen<T> {
     /// The retry time.
@@ -474,6 +488,33 @@ impl Visitor<'_> for RetryVisitor {
     }
 }
 
+impl<T, R> From<RetryResult<T, R>> for RetryIndefResult<T, R>
+where
+    R: RetryWhen
+{
+    #[inline]
+    fn from(val: RetryResult<T, R>) -> Self {
+        match val {
+            RetryResult::Success(val) => RetryIndefResult::Success(val),
+            RetryResult::Retry(when) => RetryIndefResult::Retry(when),
+        }
+    }
+}
+
+impl<T, R> From<RetryIndefResult<T, R>> for Option<RetryResult<T, R>>
+where
+    R: RetryWhen
+{
+    #[inline]
+    fn from(val: RetryIndefResult<T, R>) -> Self {
+        match val {
+            RetryIndefResult::Success(val) => Some(RetryResult::Success(val)),
+            RetryIndefResult::Retry(when) => Some(RetryResult::Retry(when)),
+            RetryIndefResult::Indef(_) => None
+        }
+    }
+}
+
 impl<T, R> RetryResult<T, R>
 where
     R: RetryWhen
@@ -638,6 +679,189 @@ where
     ) where
         F: FnOnce(&R) {
         if let RetryResult::Retry(retry) = self {
+            f(retry)
+        }
+    }
+}
+
+impl<T, R> RetryIndefResult<T, R>
+where
+    R: RetryWhen
+{
+    /// Apply a mapping function to the success result.
+    #[inline]
+    pub fn map<F, S>(
+        self,
+        f: F
+    ) -> RetryIndefResult<S, R>
+    where
+        F: FnOnce(T) -> S {
+        match self {
+            RetryIndefResult::Success(val) => RetryIndefResult::Success(f(val)),
+            RetryIndefResult::Retry(retry) => RetryIndefResult::Retry(retry),
+            RetryIndefResult::Indef(indef) => RetryIndefResult::Indef(indef)
+        }
+    }
+
+    /// Apply a mapping function to the retry result.
+    #[inline]
+    pub fn map_retry<F, Q>(
+        self,
+        f: F
+    ) -> RetryIndefResult<T, Q>
+    where
+        Q: RetryWhen,
+        F: FnOnce(R) -> Q {
+        match self {
+            RetryIndefResult::Success(val) => RetryIndefResult::Success(val),
+            RetryIndefResult::Retry(retry) => RetryIndefResult::Retry(f(retry)),
+            RetryIndefResult::Indef(indef) => RetryIndefResult::Indef(indef)
+        }
+    }
+
+    /// Apply an error-producing mapping function to the success result.
+    #[inline]
+    pub fn map_ok<F, S, E>(
+        self,
+        f: F
+    ) -> Result<RetryIndefResult<S, R>, E>
+    where
+        F: FnOnce(T) -> Result<S, E> {
+        match self {
+            RetryIndefResult::Success(val) =>
+                Ok(RetryIndefResult::Success(f(val)?)),
+            RetryIndefResult::Retry(retry) =>
+                Ok(RetryIndefResult::Retry(retry)),
+            RetryIndefResult::Indef(indef) => Ok(RetryIndefResult::Indef(indef))
+        }
+    }
+
+    /// Apply an error-producing mapping function to the retry result.
+    #[inline]
+    pub fn map_retry_ok<F, Q, E>(
+        self,
+        f: F
+    ) -> Result<RetryIndefResult<T, Q>, E>
+    where
+        Q: RetryWhen,
+        F: FnOnce(R) -> Result<Q, E> {
+        match self {
+            RetryIndefResult::Success(val) =>
+                Ok(RetryIndefResult::Success(val)),
+            RetryIndefResult::Retry(retry) =>
+                Ok(RetryIndefResult::Retry(f(retry)?)),
+            RetryIndefResult::Indef(indef) => Ok(RetryIndefResult::Indef(indef))
+        }
+    }
+
+    /// Apply a mapping function to the success result.
+    #[inline]
+    pub fn flat_map<F, S>(
+        self,
+        f: F
+    ) -> RetryIndefResult<S, R>
+    where
+        F: FnOnce(T) -> RetryIndefResult<S, R> {
+        match self {
+            RetryIndefResult::Success(val) => f(val),
+            RetryIndefResult::Retry(retry) => RetryIndefResult::Retry(retry),
+            RetryIndefResult::Indef(indef) => RetryIndefResult::Indef(indef)
+        }
+    }
+
+    /// Apply a mapping function to the retry result.
+    #[inline]
+    pub fn flat_map_retry<F, Q>(
+        self,
+        f: F
+    ) -> RetryIndefResult<T, Q>
+    where
+        Q: RetryWhen,
+        F: FnOnce(R) -> RetryIndefResult<T, Q> {
+        match self {
+            RetryIndefResult::Success(val) => RetryIndefResult::Success(val),
+            RetryIndefResult::Retry(retry) => f(retry),
+            RetryIndefResult::Indef(indef) => RetryIndefResult::Indef(indef)
+        }
+    }
+
+    /// Apply an error-producing mapping function to the success result.
+    #[inline]
+    pub fn flat_map_ok<F, S, E>(
+        self,
+        f: F
+    ) -> Result<RetryIndefResult<S, R>, E>
+    where
+        F: FnOnce(T) -> Result<RetryIndefResult<S, R>, E> {
+        match self {
+            RetryIndefResult::Success(val) => f(val),
+            RetryIndefResult::Retry(retry) =>
+                Ok(RetryIndefResult::Retry(retry)),
+            RetryIndefResult::Indef(indef) => Ok(RetryIndefResult::Indef(indef))
+        }
+    }
+
+    /// Apply an error-producing mapping function to the retry result.
+    #[inline]
+    pub fn flat_map_retry_ok<F, Q, E>(
+        self,
+        f: F
+    ) -> Result<RetryIndefResult<T, Q>, E>
+    where
+        Q: RetryWhen,
+        F: FnOnce(R) -> Result<RetryIndefResult<T, Q>, E> {
+        match self {
+            RetryIndefResult::Success(val) =>
+                Ok(RetryIndefResult::Success(val)),
+            RetryIndefResult::Retry(retry) => f(retry),
+            RetryIndefResult::Indef(indef) => Ok(RetryIndefResult::Indef(indef))
+        }
+    }
+
+    /// Apply a function to the success result.
+    #[inline]
+    pub fn app<F>(
+        self,
+        f: F
+    ) where
+        F: FnOnce(T) {
+        if let RetryIndefResult::Success(val) = self {
+            f(val)
+        }
+    }
+
+    /// Apply a function to the retry result.
+    #[inline]
+    pub fn app_retry<F>(
+        self,
+        f: F
+    ) where
+        F: FnOnce(R) {
+        if let RetryIndefResult::Retry(retry) = self {
+            f(retry)
+        }
+    }
+
+    /// Apply a function to the success result.
+    #[inline]
+    pub fn inspect<F>(
+        &self,
+        f: F
+    ) where
+        F: FnOnce(&T) {
+        if let RetryIndefResult::Success(val) = self {
+            f(val)
+        }
+    }
+
+    /// Apply a function to the retry result.
+    #[inline]
+    pub fn inspect_retry<F>(
+        &self,
+        f: F
+    ) where
+        F: FnOnce(&R) {
+        if let RetryIndefResult::Retry(retry) = self {
             f(retry)
         }
     }

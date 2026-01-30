@@ -39,7 +39,7 @@ use log::warn;
 use crate::error::ErrorScope;
 use crate::error::ScopedError;
 use crate::retry::Retry;
-use crate::retry::RetryResult;
+use crate::retry::RetryIndefResult;
 
 /// Trait for histories that are used to determine scores for scheduling.
 pub trait History {
@@ -608,7 +608,7 @@ where
         &mut self,
         config: &H::Config,
         policy: &P
-    ) -> Option<RetryResult<(Item, Origin, usize)>>
+    ) -> RetryIndefResult<(Item, Origin, usize)>
     where
         P: Policy<Item = Item> {
         // The ordering array should always be nonzero, but check anyway.
@@ -633,7 +633,7 @@ where
                         Some(until)
                     };
 
-                    (Some(RetryResult::Retry(until)), new_until)
+                    (RetryIndefResult::Retry(until), new_until)
                 }
                 // No delay record; the address is good to go.
                 None => {
@@ -641,15 +641,15 @@ where
                         record.last_use = Instant::now();
 
                         (
-                            Some(RetryResult::Success((
+                            RetryIndefResult::Success((
                                 item.clone(),
                                 origin.clone(),
                                 idx
-                            ))),
+                            )),
                             None
                         )
                     } else {
-                        (None, None)
+                        (RetryIndefResult::Indef(()), None)
                     }
                 }
             };
@@ -658,7 +658,7 @@ where
 
             out
         } else {
-            None
+            RetryIndefResult::Indef(())
         }
     }
 
@@ -1246,21 +1246,20 @@ where
     pub fn select(
         &mut self
     ) -> Result<
-        Option<RetryResult<(P::Item, Origin, DenseItemID<Epochs::Item>)>>,
+        RetryIndefResult<(P::Item, Origin, DenseItemID<Epochs::Item>)>,
         SelectError
     > {
         match &mut self.state {
             SchedState::Multi { sched, .. } => {
-                Ok(sched.item(&self.config, &self.policy).map(|res| {
-                    res.map(|(item, origin, idx)| {
-                        let dense = DenseItemID {
-                            epoch: self.epoch.clone(),
-                            id: idx
-                        };
+                Ok(sched.item(&self.config, &self.policy)
+                   .map(|(item, origin, idx)| {
+                       let dense = DenseItemID {
+                           epoch: self.epoch.clone(),
+                           id: idx
+                       };
 
-                        (item, origin, dense)
-                    })
-                }))
+                       (item, origin, dense)
+                   }))
             }
             SchedState::Single {
                 record,
@@ -1279,7 +1278,7 @@ where
                                 Some(until)
                             };
 
-                            (Ok(Some(RetryResult::Retry(until))), new_until)
+                            (Ok(RetryIndefResult::Retry(until)), new_until)
                         }
                         // No delay record; the address is good to go.
                         None => {
@@ -1290,11 +1289,11 @@ where
                             record.last_use = Instant::now();
 
                             (
-                                Ok(Some(RetryResult::Success((
+                                Ok(RetryIndefResult::Success((
                                     single.clone(),
                                     origin.clone(),
                                     dense
-                                )))),
+                                ))),
                                 None
                             )
                         }
@@ -1304,7 +1303,7 @@ where
 
                     out
                 } else {
-                    Ok(None)
+                    Ok(RetryIndefResult::Indef(()))
                 }
             }
             // This shouldn't happen.
@@ -1529,7 +1528,7 @@ fn test_multi_sched_prefer_success() {
 
     let res = sched.item(&config, &TestPolicy);
 
-    assert!(matches!(res, Some(RetryResult::Success((1, (), _)))));
+    assert!(matches!(res, RetryIndefResult::Success((1, (), _))));
 
     let mut vec = Vec::with_capacity(sched.ordering.len());
 
@@ -1557,7 +1556,7 @@ fn test_multi_sched_prefer_more_success() {
 
     let res = sched.item(&config, &TestPolicy);
 
-    assert!(matches!(res, Some(RetryResult::Success((1, (), _)))));
+    assert!(matches!(res, RetryIndefResult::Success((1, (), _))));
 
     let mut vec = Vec::with_capacity(sched.ordering.len());
 
@@ -1586,7 +1585,7 @@ fn test_multi_sched_prefer_no_fail() {
 
     let res = sched.item(&config, &TestPolicy);
 
-    assert!(matches!(res, Some(RetryResult::Success((1, (), _)))));
+    assert!(matches!(res, RetryIndefResult::Success((1, (), _))));
 
     let mut vec = Vec::with_capacity(sched.ordering.len());
 
@@ -1621,7 +1620,7 @@ fn test_multi_sched_prefer_fewer_fail() {
 
     let res = sched.item(&config, &TestPolicy);
 
-    assert!(matches!(res, Some(RetryResult::Retry(_))));
+    assert!(matches!(res, RetryIndefResult::Retry(_)));
 
     let mut vec = Vec::with_capacity(sched.ordering.len());
 
@@ -1648,7 +1647,7 @@ fn test_multi_sched_prefer_active_over_success() {
 
     let res = sched.item(&config, &TestPolicy);
 
-    assert!(matches!(res, Some(RetryResult::Success((0, (), _)))));
+    assert!(matches!(res, RetryIndefResult::Success((0, (), _))));
 
     let mut vec = Vec::with_capacity(sched.ordering.len());
 
@@ -1677,7 +1676,7 @@ fn test_multi_sched_prefer_active_over_more_success() {
 
     let res = sched.item(&config, &TestPolicy);
 
-    assert!(matches!(res, Some(RetryResult::Success((0, (), _)))));
+    assert!(matches!(res, RetryIndefResult::Success((0, (), _))));
 
     let mut vec = Vec::with_capacity(sched.ordering.len());
 
@@ -1707,7 +1706,7 @@ fn test_multi_sched_prefer_active_over_no_fail() {
 
     let res = sched.item(&config, &TestPolicy);
 
-    assert!(matches!(res, Some(RetryResult::Retry(_))));
+    assert!(matches!(res, RetryIndefResult::Retry(_)));
 
     let mut vec = Vec::with_capacity(sched.ordering.len());
 
@@ -1743,7 +1742,7 @@ fn test_multi_sched_prefer_active_over_fewer_fail() {
 
     let res = sched.item(&config, &TestPolicy);
 
-    assert!(matches!(res, Some(RetryResult::Retry(_))));
+    assert!(matches!(res, RetryIndefResult::Retry(_)));
 
     let mut vec = Vec::with_capacity(sched.ordering.len());
 
@@ -1770,7 +1769,7 @@ fn test_multi_sched_no_actives() {
 
     let res = sched.item(&config, &TestPolicy);
 
-    assert!(matches!(res, None));
+    assert!(matches!(res, RetryIndefResult::Indef(())));
 
     let mut vec = Vec::with_capacity(sched.ordering.len());
 
