@@ -488,7 +488,7 @@ impl Visitor<'_> for RetryVisitor {
     }
 }
 
-impl<T, R> From<RetryResult<T, R>> for RetryIndefResult<T, R>
+impl<T, R, I> From<RetryResult<T, R>> for RetryIndefResult<T, R, I>
 where
     R: RetryWhen
 {
@@ -496,21 +496,7 @@ where
     fn from(val: RetryResult<T, R>) -> Self {
         match val {
             RetryResult::Success(val) => RetryIndefResult::Success(val),
-            RetryResult::Retry(when) => RetryIndefResult::Retry(when),
-        }
-    }
-}
-
-impl<T, R> From<RetryIndefResult<T, R>> for Option<RetryResult<T, R>>
-where
-    R: RetryWhen
-{
-    #[inline]
-    fn from(val: RetryIndefResult<T, R>) -> Self {
-        match val {
-            RetryIndefResult::Success(val) => Some(RetryResult::Success(val)),
-            RetryIndefResult::Retry(when) => Some(RetryResult::Retry(when)),
-            RetryIndefResult::Indef(_) => None
+            RetryResult::Retry(when) => RetryIndefResult::Retry(when)
         }
     }
 }
@@ -684,7 +670,7 @@ where
     }
 }
 
-impl<T, R> RetryIndefResult<T, R>
+impl<T, R, I> RetryIndefResult<T, R, I>
 where
     R: RetryWhen
 {
@@ -693,7 +679,7 @@ where
     pub fn map<F, S>(
         self,
         f: F
-    ) -> RetryIndefResult<S, R>
+    ) -> RetryIndefResult<S, R, I>
     where
         F: FnOnce(T) -> S {
         match self {
@@ -708,7 +694,7 @@ where
     pub fn map_retry<F, Q>(
         self,
         f: F
-    ) -> RetryIndefResult<T, Q>
+    ) -> RetryIndefResult<T, Q, I>
     where
         Q: RetryWhen,
         F: FnOnce(R) -> Q {
@@ -724,14 +710,16 @@ where
     pub fn map_ok<F, S, E>(
         self,
         f: F
-    ) -> Result<RetryIndefResult<S, R>, E>
+    ) -> Result<RetryIndefResult<S, R, I>, E>
     where
         F: FnOnce(T) -> Result<S, E> {
         match self {
-            RetryIndefResult::Success(val) =>
-                Ok(RetryIndefResult::Success(f(val)?)),
-            RetryIndefResult::Retry(retry) =>
-                Ok(RetryIndefResult::Retry(retry)),
+            RetryIndefResult::Success(val) => {
+                Ok(RetryIndefResult::Success(f(val)?))
+            }
+            RetryIndefResult::Retry(retry) => {
+                Ok(RetryIndefResult::Retry(retry))
+            }
             RetryIndefResult::Indef(indef) => Ok(RetryIndefResult::Indef(indef))
         }
     }
@@ -741,15 +729,17 @@ where
     pub fn map_retry_ok<F, Q, E>(
         self,
         f: F
-    ) -> Result<RetryIndefResult<T, Q>, E>
+    ) -> Result<RetryIndefResult<T, Q, I>, E>
     where
         Q: RetryWhen,
         F: FnOnce(R) -> Result<Q, E> {
         match self {
-            RetryIndefResult::Success(val) =>
-                Ok(RetryIndefResult::Success(val)),
-            RetryIndefResult::Retry(retry) =>
-                Ok(RetryIndefResult::Retry(f(retry)?)),
+            RetryIndefResult::Success(val) => {
+                Ok(RetryIndefResult::Success(val))
+            }
+            RetryIndefResult::Retry(retry) => {
+                Ok(RetryIndefResult::Retry(f(retry)?))
+            }
             RetryIndefResult::Indef(indef) => Ok(RetryIndefResult::Indef(indef))
         }
     }
@@ -759,9 +749,9 @@ where
     pub fn flat_map<F, S>(
         self,
         f: F
-    ) -> RetryIndefResult<S, R>
+    ) -> RetryIndefResult<S, R, I>
     where
-        F: FnOnce(T) -> RetryIndefResult<S, R> {
+        F: FnOnce(T) -> RetryIndefResult<S, R, I> {
         match self {
             RetryIndefResult::Success(val) => f(val),
             RetryIndefResult::Retry(retry) => RetryIndefResult::Retry(retry),
@@ -774,10 +764,10 @@ where
     pub fn flat_map_retry<F, Q>(
         self,
         f: F
-    ) -> RetryIndefResult<T, Q>
+    ) -> RetryIndefResult<T, Q, I>
     where
         Q: RetryWhen,
-        F: FnOnce(R) -> RetryIndefResult<T, Q> {
+        F: FnOnce(R) -> RetryIndefResult<T, Q, I> {
         match self {
             RetryIndefResult::Success(val) => RetryIndefResult::Success(val),
             RetryIndefResult::Retry(retry) => f(retry),
@@ -790,13 +780,14 @@ where
     pub fn flat_map_ok<F, S, E>(
         self,
         f: F
-    ) -> Result<RetryIndefResult<S, R>, E>
+    ) -> Result<RetryIndefResult<S, R, I>, E>
     where
-        F: FnOnce(T) -> Result<RetryIndefResult<S, R>, E> {
+        F: FnOnce(T) -> Result<RetryIndefResult<S, R, I>, E> {
         match self {
             RetryIndefResult::Success(val) => f(val),
-            RetryIndefResult::Retry(retry) =>
-                Ok(RetryIndefResult::Retry(retry)),
+            RetryIndefResult::Retry(retry) => {
+                Ok(RetryIndefResult::Retry(retry))
+            }
             RetryIndefResult::Indef(indef) => Ok(RetryIndefResult::Indef(indef))
         }
     }
@@ -806,13 +797,14 @@ where
     pub fn flat_map_retry_ok<F, Q, E>(
         self,
         f: F
-    ) -> Result<RetryIndefResult<T, Q>, E>
+    ) -> Result<RetryIndefResult<T, Q, I>, E>
     where
         Q: RetryWhen,
-        F: FnOnce(R) -> Result<RetryIndefResult<T, Q>, E> {
+        F: FnOnce(R) -> Result<RetryIndefResult<T, Q, I>, E> {
         match self {
-            RetryIndefResult::Success(val) =>
-                Ok(RetryIndefResult::Success(val)),
+            RetryIndefResult::Success(val) => {
+                Ok(RetryIndefResult::Success(val))
+            }
             RetryIndefResult::Retry(retry) => f(retry),
             RetryIndefResult::Indef(indef) => Ok(RetryIndefResult::Indef(indef))
         }

@@ -17,6 +17,7 @@
 // <https://www.gnu.org/licenses/>.
 
 //! Common traits for network communications.
+use std::collections::HashSet;
 use std::convert::Infallible;
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -118,7 +119,8 @@ pub trait SharedMsgs<Party, Msg> {
     /// This will provide the outbound messages, if there are any, as
     /// well as the time at which to check again for new messages.
     fn msgs(
-        &mut self
+        &mut self,
+        live: &HashSet<Party>
     ) -> Result<
         (Option<Vec<(Vec<Party>, Vec<Msg>)>>, Option<Instant>),
         Self::MsgsError

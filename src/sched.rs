@@ -1250,17 +1250,16 @@ where
         SelectError
     > {
         match &mut self.state {
-            SchedState::Multi { sched, .. } => {
-                Ok(sched.item(&self.config, &self.policy)
-                   .map(|(item, origin, idx)| {
-                       let dense = DenseItemID {
-                           epoch: self.epoch.clone(),
-                           id: idx
-                       };
+            SchedState::Multi { sched, .. } => Ok(sched
+                .item(&self.config, &self.policy)
+                .map(|(item, origin, idx)| {
+                    let dense = DenseItemID {
+                        epoch: self.epoch.clone(),
+                        id: idx
+                    };
 
-                       (item, origin, dense)
-                   }))
-            }
+                    (item, origin, dense)
+                })),
             SchedState::Single {
                 record,
                 single,
