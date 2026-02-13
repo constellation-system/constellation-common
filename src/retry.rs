@@ -705,6 +705,21 @@ where
         }
     }
 
+    /// Apply a mapping function to the retry result.
+    #[inline]
+    pub fn map_indef<F, J>(
+        self,
+        f: F
+    ) -> RetryIndefResult<T, R, J>
+    where
+        F: FnOnce(I) -> J {
+        match self {
+            RetryIndefResult::Success(val) => RetryIndefResult::Success(val),
+            RetryIndefResult::Retry(retry) => RetryIndefResult::Retry(retry),
+            RetryIndefResult::Indef(indef) => RetryIndefResult::Indef(f(indef))
+        }
+    }
+
     /// Apply an error-producing mapping function to the success result.
     #[inline]
     pub fn map_ok<F, S, E>(
