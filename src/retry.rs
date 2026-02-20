@@ -195,10 +195,10 @@ struct RetryVisitor;
 /// `next`; otherwise, `next`.
 #[inline]
 pub fn next_retry_definite(
-    unbound: Option<Instant>,
-    next: Instant
+    unbound: &Option<Instant>,
+    next: &Instant
 ) -> Instant {
-    unbound.map_or(next, |when| when.min(next))
+    unbound.map_or(*next, |when| when.min(*next))
 }
 
 /// Given two unbounded waits, combine the two and get the wait time.
@@ -216,10 +216,10 @@ pub fn next_retry_definite(
 /// `Some(time)` then the sooner of the two times.
 #[inline]
 pub fn next_retry(
-    curr: Option<Instant>,
-    other: Option<Instant>
+    curr: &Option<Instant>,
+    other: &Option<Instant>
 ) -> Option<Instant> {
-    other.map_or(curr, |when| Some(next_retry_definite(curr, when)))
+    other.map_or(*curr, |when| Some(next_retry_definite(curr, &when)))
 }
 
 impl Default for Retry {
@@ -986,7 +986,7 @@ impl RetryWhen for Infallible {
 #[test]
 fn test_next_retry_definite_none() {
     let now = Instant::now();
-    let time = next_retry_definite(None, now);
+    let time = next_retry_definite(&None, &now);
 
     assert_eq!(time, now);
 }
@@ -995,7 +995,7 @@ fn test_next_retry_definite_none() {
 fn test_next_retry_definite_some_less() {
     let now = Instant::now();
     let next = now + Duration::from_secs(1);
-    let time = next_retry_definite(Some(now), next);
+    let time = next_retry_definite(&Some(now), &next);
 
     assert_eq!(time, now);
 }
@@ -1004,14 +1004,14 @@ fn test_next_retry_definite_some_less() {
 fn test_next_retry_definite_some_greater() {
     let now = Instant::now();
     let next = now + Duration::from_secs(1);
-    let time = next_retry_definite(Some(next), now);
+    let time = next_retry_definite(&Some(next), &now);
 
     assert_eq!(time, now);
 }
 
 #[test]
 fn test_next_retry_none() {
-    let time = next_retry(None, None);
+    let time = next_retry(&None, &None);
 
     assert_eq!(time, None);
 }
@@ -1019,7 +1019,7 @@ fn test_next_retry_none() {
 #[test]
 fn test_next_retry_none_some() {
     let now = Instant::now();
-    let time = next_retry(None, Some(now));
+    let time = next_retry(&None, &Some(now));
 
     assert_eq!(time, Some(now));
 }
@@ -1027,7 +1027,7 @@ fn test_next_retry_none_some() {
 #[test]
 fn test_next_retry_some_none() {
     let now = Instant::now();
-    let time = next_retry(Some(now), None);
+    let time = next_retry(&Some(now), &None);
 
     assert_eq!(time, Some(now));
 }
@@ -1036,7 +1036,7 @@ fn test_next_retry_some_none() {
 fn test_next_retry_some_some_less() {
     let now = Instant::now();
     let next = now + Duration::from_secs(1);
-    let time = next_retry(Some(now), Some(next));
+    let time = next_retry(&Some(now), &Some(next));
 
     assert_eq!(time, Some(now));
 }
@@ -1045,7 +1045,7 @@ fn test_next_retry_some_some_less() {
 fn test_next_retry_some_some_greater() {
     let now = Instant::now();
     let next = now + Duration::from_secs(1);
-    let time = next_retry(Some(next), Some(now));
+    let time = next_retry(&Some(next), &Some(now));
 
     assert_eq!(time, Some(now));
 }
