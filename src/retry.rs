@@ -547,6 +547,12 @@ impl<T, R> RetryResult<T, R>
 where
     R: RetryWhen
 {
+    /// Check if this `RetryResult` is a success.
+    #[inline]
+    pub fn is_success(&self) -> bool {
+        matches![self, RetryResult::Success(_)]
+    }
+
     /// Apply a mapping function to the success result.
     #[inline]
     pub fn map<F, S>(
@@ -716,6 +722,12 @@ impl<T, R, I> RetryIndefResult<T, R, I>
 where
     R: RetryWhen
 {
+    /// Check if this `RetryIndefResult` is a success.
+    #[inline]
+    pub fn is_success(&self) -> bool {
+        matches![self, RetryIndefResult::Success(_)]
+    }
+
     /// Apply a mapping function to the success result.
     #[inline]
     pub fn map<F, S>(
