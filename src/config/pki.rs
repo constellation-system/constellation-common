@@ -718,7 +718,7 @@ impl PKITrustRoot {
     /// #
     /// let yaml = concat!(
     ///     "root-certs:\n",
-    ///     "  - test/data/certs/server/ca_cert.pem\n",
+    ///     "  - tests/data/certs/server/ca_cert.pem\n",
     ///     "crls: []\n",
     ///     "verify-flags:\n",
     ///     "  - EXPLICIT_POLICY\n",
@@ -1200,7 +1200,7 @@ fn test_load_trust_root_single_no_crl() {
 
     let yaml = concat!(
         "root-certs:\n",
-        "  - test/data/certs/client/ca_cert.pem\n",
+        "  - tests/data/certs/client/ca_cert.pem\n",
         "crls: []\n"
     );
     let root: PKITrustRoot = serde_yaml::from_str(yaml).unwrap();
@@ -1217,8 +1217,8 @@ fn test_load_trust_root_two_no_crl() {
 
     let yaml = concat!(
         "root-certs:\n",
-        "  - test/data/certs/client/ca_cert.pem\n",
-        "  - test/data/certs/server/ca_cert.pem\n",
+        "  - tests/data/certs/client/ca_cert.pem\n",
+        "  - tests/data/certs/server/ca_cert.pem\n",
         "crls: []\n"
     );
     let root: PKITrustRoot = serde_yaml::from_str(yaml).unwrap();
@@ -1234,7 +1234,7 @@ fn test_load_trust_root_dir_no_crl() {
     init();
 
     let yaml =
-        concat!("dirs:\n", "  - test/data/certs/client/\n", "crls: []\n");
+        concat!("dirs:\n", "  - tests/data/certs/client/\n", "crls: []\n");
     let root: PKITrustRoot = serde_yaml::from_str(yaml).unwrap();
     let name = String::from("test-client.nowhere.com");
     let endpoint = IPEndpointAddr::name(name);
@@ -1249,9 +1249,9 @@ fn test_load_trust_root_dir_certs_auth_level() {
 
     let yaml = concat!(
         "root-certs:\n",
-        "  - test/data/certs/server/ca_cert.pem\n",
+        "  - tests/data/certs/server/ca_cert.pem\n",
         "dirs:\n",
-        "  - test/data/certs/client/\n",
+        "  - tests/data/certs/client/\n",
         "auth-level: 3\n"
     );
     let root: PKITrustRoot = serde_yaml::from_str(yaml).unwrap();
@@ -1268,9 +1268,9 @@ fn test_load_trust_root_dir_certs_verify_flags() {
 
     let yaml = concat!(
         "root-certs:\n",
-        "  - test/data/certs/server/ca_cert.pem\n",
+        "  - tests/data/certs/server/ca_cert.pem\n",
         "dirs:\n",
-        "  - test/data/certs/client/\n",
+        "  - tests/data/certs/client/\n",
         "verify-flags:\n",
         "  - CRL_CHECK_ALL\n",
         "  - EXPLICIT_POLICY\n"
