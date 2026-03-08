@@ -955,6 +955,15 @@ impl<T, R> NegotiatorResult<T, R> {
     }
 }
 
+impl From<(String, u16)> for IPEndpoint {
+    #[inline]
+    fn from(val: (String, u16)) -> Self {
+        let name = IPEndpointAddr::name(val.0);
+
+        IPEndpoint::new(name, val.1)
+    }
+}
+
 impl Display for IPEndpoint {
     fn fmt(
         &self,
