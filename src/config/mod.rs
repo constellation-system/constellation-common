@@ -48,14 +48,13 @@ pub trait Create: Sized {
     fn create(config: Self::Config) -> Result<Self, Self::CreateError>;
 }
 
-pub trait CreateArg: Sized {
+pub trait CreateWithParam<Param>: Sized {
     type CreateError: Debug + Display;
     type Config;
-    type Arg;
 
     fn create(
         config: Self::Config,
-        arg: Self::Arg
+        param: Param
     ) -> Result<Self, Self::CreateError>;
 }
 
