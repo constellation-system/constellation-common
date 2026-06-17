@@ -23,11 +23,11 @@
 //! and decoding objects for transmission over the network, as opposed
 //! to the [serde] framework.  This is done for several reasons:
 //!
-//! * It allows the exact formats of messages to vary for different channels.
+//! - It allows the exact formats of messages to vary for different channels.
 //!
-//! * It allows more precise control over the exact message formats.
+//! - It allows more precise control over the exact message formats.
 //!
-//! * It facilitates the use of encoding formats such as ASN.1 PER.
+//! - It facilitates the use of encoding formats such as ASN.1 PER.
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -35,6 +35,7 @@ use std::io::Read;
 use std::io::Write;
 
 pub mod per;
+pub mod test;
 
 use crate::error::ErrorScope;
 use crate::error::ScopedError;
@@ -48,7 +49,7 @@ use crate::error::ScopedError;
 ///
 /// # Type Parameters
 ///
-/// * `T`: The type represented in messages.
+/// - `T`: The type represented in messages.
 pub trait DatagramCodec<T> {
     /// Maximum message size.
     const MAX_BYTES: usize;
@@ -58,8 +59,8 @@ pub trait DatagramCodec<T> {
 ///
 /// # Type Parameters
 ///
-/// * `T`: The type represented in messages.
-pub trait Encoder<T> {
+/// - `T`: The type represented in messages.
+pub trait Encoder<T: ?Sized> {
     /// Errors that can occur when encoding.
     type EncodeError: Debug + Display + ScopedError;
 
@@ -70,7 +71,7 @@ pub trait Encoder<T> {
     ///
     /// # Parameters
     ///
-    /// * `val`: Value to be encoded.
+    /// - `val`: Value to be encoded.
     fn buf_size(
         &self,
         val: &T
@@ -83,8 +84,9 @@ pub trait Encoder<T> {
     ///
     /// # Parameters
     ///
-    /// * `val`: Value to be encoded.
-    /// * `buf`: Buffer into which to encode.
+    /// - `val`: Value to be encoded.
+    ///
+    /// - `buf`: Buffer into which to encode.
     fn encode(
         &mut self,
         val: &T,
@@ -95,7 +97,7 @@ pub trait Encoder<T> {
     ///
     /// # Parameters
     ///
-    /// * `val`: Value to be encoded.
+    /// - `val`: Value to be encoded.
     fn encode_to_vec(
         &mut self,
         val: &T
@@ -113,28 +115,45 @@ pub trait Encoder<T> {
 ///
 /// # Type Parameters
 ///
-/// * `T`: The type represented in messages.
+/// - `T`: The type represented in messages.
 pub trait Decoder<T> {
     /// Errors that can occur when decoding.
     type DecodeError: Debug + Display + ScopedError;
 
-    /// Decode a message into `buf` and return the number of bytes consumed.
+    /// Decode a message from `buf` and return the number of bytes consumed.
     ///
     /// The slice `buf` must contain at least
     /// [MAX_BYTES](DatagramCodec::MAX_BYTES) bytes.
     ///
     /// # Parameters
     ///
-    /// * `buf`: Buffer from which to decode.
+    /// - `buf`: Buffer from which to decode.
     fn decode(
         &mut self,
         buf: &[u8]
     ) -> Result<(T, usize), Self::DecodeError>;
 }
 
-pub trait BytestreamEncoder<T> {
+/// Trait for encoding logic from `T` to a [Write]r.
+///
+/// # Type Parameters
+///
+/// - `T`: The type represented in messages.
+pub trait BytestreamEncoder<T: ?Sized> {
     type StreamEncodeError: Debug + Display + ScopedError;
 
+    /// Encode a message into `stream` and return the number of bytes
+    /// produced.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `W`: The type of bytestream [Write]rs used.
+    ///
+    /// # Parameters
+    ///
+    /// - `stream`: Stream to which to write `val`.
+    ///
+    /// - `val`: Value to be encoded.
     fn encode_to_stream<W>(
         &mut self,
         stream: &mut W,
@@ -144,9 +163,27 @@ pub trait BytestreamEncoder<T> {
         W: Write;
 }
 
+/// Trait for decoding logic from a bytestream [Read]er to a `T`.
+///
+/// # Type Parameters
+///
+/// - `T`: The type represented in messages.
 pub trait BytestreamDecoder<T> {
     type StreamDecodeError: Debug + Display + ScopedError;
 
+    /// Decode a message from `stream` and return the number of bytes
+    /// consumed.
+    ///
+    /// The slice `buf` must contain at least
+    /// [MAX_BYTES](DatagramCodec::MAX_BYTES) bytes.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `R`: Type of bytestream [Read]ers used.
+    ///
+    /// # Parameters
+    ///
+    /// - `stream`: Bytestream [Read]er from which to read the message.
     fn decode_from_stream<R>(
         &mut self,
         stream: &mut R
@@ -165,6 +202,7 @@ pub struct USizeCodec;
 /// This is intended primarily for testing.
 pub struct ISizeCodec;
 
+/// Error indicating the buffer was too short.
 #[derive(Debug)]
 pub struct TooShort;
 

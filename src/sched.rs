@@ -1060,8 +1060,8 @@ where
                                     // The old item is among the new ones.
                                     Some(record) => {
                                         trace!(target: "scheduler",
-                                               concat!("got a previously known",
-                                                       " singular item {}"),
+                                               "got a previously known \
+                                                singular item {}",
                                                item);
 
                                         self.state = SchedState::Single {
@@ -1308,8 +1308,7 @@ where
             // This shouldn't happen.
             SchedState::Uninit => {
                 error!(target: "scheduler",
-                       concat!("attempting to get item from ",
-                               "uninitialized scheduler"));
+                       "attempting to get item from uninitialized scheduler");
 
                 Err(SelectError::Uninit)
             }

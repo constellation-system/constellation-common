@@ -23,6 +23,7 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::io::ErrorKind;
+use std::string::FromUtf8Error;
 
 use asn1rs::io::per::err::Error;
 use log::error;
@@ -201,8 +202,9 @@ pub enum WithMutexPoison<Error> {
 ///
 /// # Type Parameters
 ///
-/// * `Codec`: Type of codec-level errors.
-/// * `IO`: Type of errors that occur while sending/receiving.
+/// - `Codec`: Type of codec-level errors.
+///
+/// - `IO`: Type of errors that occur while sending/receiving.
 #[derive(Debug)]
 pub enum CodecStreamError<Codec, IO> {
     /// Error occurred when encoding or decoding the message.
@@ -389,6 +391,13 @@ impl ScopedError for openssl::ssl::Error {
     fn scope(&self) -> ErrorScope {
         // XXX Actually do this properly
         ErrorScope::External
+    }
+}
+
+impl ScopedError for FromUtf8Error {
+    #[inline]
+    fn scope(&self) -> ErrorScope {
+        ErrorScope::Msg
     }
 }
 

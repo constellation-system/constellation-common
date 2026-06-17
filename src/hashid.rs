@@ -69,7 +69,7 @@ pub trait HashAlgo {
     ///
     /// # Parameters
     ///
-    /// * `bytes`: Raw bytes representing the hash value.
+    /// - `bytes`: Raw bytes representing the hash value.
     fn wrap_hashed_bytes(
         &self,
         bytes: &[u8]
@@ -77,9 +77,13 @@ pub trait HashAlgo {
 
     /// Compute the hash of a stream of bytes.
     ///
+    /// # Type Parameters
+    ///
+    /// - `I`: Type of iterators for byte arrays.
+    ///
     /// # Parameters
     ///
-    /// * `bytes`: Iterator producing one or more byte slices (`&[u8]`s).
+    /// - `bytes`: Iterator producing one or more byte slices (`&[u8]`s).
     fn hash_bytes<'a, I>(
         &self,
         bytes: I
@@ -97,13 +101,15 @@ pub trait HashAlgo {
     ///
     /// # Type Parameters
     ///
-    /// * `T`: The type being encoded.
-    /// * `C`: The type of [Encoder] to use to encode `T`.
+    /// - `T`: The type being encoded.
+    ///
+    /// - `C`: The type of [Encoder] to use to encode `T`.
     ///
     /// # Parameters
     ///
-    /// * `codec`: The [Encoder] to use to produce the byte representation.
-    /// * `val`: The value to encode.
+    /// - `codec`: The [Encoder] to use to produce the byte representation.
+    ///
+    /// - `val`: The value to encode.
     fn hashid<T, C>(
         &self,
         codec: &mut C,

@@ -103,7 +103,8 @@ impl<Msg> PrivateMsgs<Msg> for TestPrivateMsgs<Msg> {
 
     #[inline]
     fn msgs(
-        &mut self
+        &mut self,
+        _now: Instant
     ) -> Result<(Option<Vec<Msg>>, Option<Instant>), Self::MsgsError> {
         self.script.pop().expect("expected script action")
     }
@@ -118,7 +119,8 @@ where
     #[inline]
     fn msgs(
         &mut self,
-        live: &HashSet<Party>
+        live: &HashSet<Party>,
+        _now: Instant
     ) -> Result<
         (Option<Vec<(Vec<Party>, Vec<Msg>)>>, Option<Instant>),
         Self::MsgsError
@@ -172,7 +174,7 @@ fn test_test_private_msgs() {
     let mut msgs = TestPrivateMsgs::new(script.clone());
 
     for act in script {
-        assert_eq!(msgs.msgs(), act)
+        assert_eq!(msgs.msgs(Instant::now()), act)
     }
 }
 
@@ -213,7 +215,7 @@ fn test_test_shared_msgs() {
     let one_two = vec![1, 2].into_iter().collect();
 
     assert_eq!(
-        msgs.msgs(&all),
+        msgs.msgs(&all, Instant::now()),
         Ok((
             Some(vec![
                 (vec![1, 2], vec!["hello", "goodbye"]),
@@ -223,7 +225,7 @@ fn test_test_shared_msgs() {
         ))
     );
     assert_eq!(
-        msgs.msgs(&one_three),
+        msgs.msgs(&one_three, Instant::now()),
         Ok((
             Some(vec![
                 (vec![1], vec!["hello", "goodbye"]),
@@ -233,7 +235,7 @@ fn test_test_shared_msgs() {
         ))
     );
     assert_eq!(
-        msgs.msgs(&one_two),
+        msgs.msgs(&one_two, Instant::now()),
         Ok((
             Some(vec![
                 (vec![1, 2], vec!["hello", "goodbye"]),
@@ -242,9 +244,9 @@ fn test_test_shared_msgs() {
             None
         ))
     );
-    assert_eq!(msgs.msgs(&all), Ok((None, Some(now))));
+    assert_eq!(msgs.msgs(&all, Instant::now()), Ok((None, Some(now))));
     assert_eq!(
-        msgs.msgs(&all),
+        msgs.msgs(&all, Instant::now()),
         Err(TestMsgsError {
             scope: ErrorScope::Msg
         })

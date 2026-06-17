@@ -16,7 +16,8 @@
 // License along with this program.  If not, see
 // <https://www.gnu.org/licenses/>.
 
-//! Common traits for network communications.
+//! Common functionality for network communications.
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::convert::Infallible;
 use std::fmt::Debug;
@@ -35,6 +36,8 @@ use std::net::Ipv6Addr;
 use std::net::SocketAddr;
 use std::net::SocketAddrV4;
 use std::net::SocketAddrV6;
+use std::ops::Deref;
+use std::rc::Rc;
 use std::str::FromStr;
 use std::time::Instant;
 
@@ -54,7 +57,7 @@ pub mod test;
 ///
 /// Implementors of this trait are also expected to implement [Read]
 /// and [Write].
-pub trait Session: Read + Write {
+pub trait Session {
     /// The type of local addresses.
     type LocalAddr: Display;
     /// The type of peer (remote) addresses.
@@ -67,22 +70,37 @@ pub trait Session: Read + Write {
     fn peer_addr(&self) -> Result<Self::PeerAddr, Error>;
 }
 
+/// Trait for protocol state machines.
+///
+/// # Type Parameters
+///
+/// - `Outcome`: The type of negotiation outcomes.
 pub trait Negotiator<Outcome> {
+    /// Type of negotiation state machine states.
     type State;
+    /// Type of results for pending negotiations.
     type Pending;
     /// Errors that can occur during negotiations.
     type NegotiateError: Debug + Display;
 
     /// Perform negotiations.
+    ///
+    /// # Parameters
+    ///
+    /// - `state`: The negotiation state machine state.
     fn negotiate(
         &self,
         state: Self::State
     ) -> Result<NegotiatorResult<Outcome, Self::Pending>, Self::NegotiateError>;
 
     /// Complete a failed negotiation.
+    ///
+    /// # Parameters
+    ///
+    /// - `pending`: The negotiation state machine state.
     fn complete_negotiate(
         &self,
-        err: Self::Pending
+        pending: Self::Pending
     ) -> Result<NegotiatorResult<Outcome, Self::Pending>, Self::NegotiateError>;
 }
 
@@ -106,8 +124,13 @@ pub trait PrivateMsgs<Msg> {
     ///
     /// This will provide the outbound messages, if there are any, as
     /// well as the time at which to check again for new messages.
+    ///
+    /// # Parameters
+    ///
+    /// - `now`: The current time; can be obtained using [now](Instant::now).
     fn msgs(
-        &mut self
+        &mut self,
+        now: Instant
     ) -> Result<(Option<Vec<Msg>>, Option<Instant>), Self::MsgsError>;
 }
 
@@ -120,9 +143,14 @@ pub trait SharedMsgs<Party, Msg> {
     ///
     /// This will provide the outbound messages, if there are any, as
     /// well as the time at which to check again for new messages.
+    ///
+    /// # Parameters
+    ///
+    /// - `now`: The current time; can be obtained using [now](Instant::now).
     fn msgs(
         &mut self,
-        live: &HashSet<Party>
+        live: &HashSet<Party>,
+        now: Instant
     ) -> Result<
         (Option<Vec<(Vec<Party>, Vec<Msg>)>>, Option<Instant>),
         Self::MsgsError
@@ -174,10 +202,16 @@ pub trait Sender: Socket {
     /// This returns the number of bytes sent, which should be equal
     /// to `buf.len()` unless the maximum size is exceeded, or an
     /// error if one occurs.
+    ///
+    /// # Parameters
+    ///
+    /// - `addr`: Address to which to send.
+    ///
+    /// - `data`: The message data to send.
     fn send_to(
         &self,
         addr: &Self::Addr,
-        buf: &[u8]
+        data: &[u8]
     ) -> Result<usize, Error>;
 
     /// Send the data in `buf` to the counterparty at `Addr`, using
@@ -186,6 +220,12 @@ pub trait Sender: Socket {
     /// This returns the number of bytes sent, which should be equal
     /// to `buf.len()` unless the maximum size is exceeded, or an
     /// error if one occurs.
+    ///
+    /// # Parameters
+    ///
+    /// - `addr`: Address to which to send.
+    ///
+    /// - `bufs`: The message data to send.
     fn send_to_vectored(
         &self,
         addr: &Self::Addr,
@@ -214,6 +254,10 @@ pub trait Receiver: Socket {
     /// cannot establish identity, unless the underlying socket
     /// implementation guarantees it.  See
     /// [allow_session_addr_creds](Socket::allow_session_addr_creds).
+    ///
+    /// # Parameters
+    ///
+    /// - `buf`: The buffer into which to write the message.
     fn recv_from(
         &self,
         buf: &mut [u8]
@@ -230,6 +274,10 @@ pub trait Receiver: Socket {
     /// cannot establish identity, unless the underlying socket
     /// implementation guarantees it.  See
     /// [allow_session_addr_creds](Socket::allow_session_addr_creds).
+    ///
+    /// # Parameters
+    ///
+    /// - `bufs`: The buffers into which to write the message.
     fn recv_from_vectored(
         &self,
         bufs: &mut [IoSliceMut<'_>]
@@ -250,11 +298,16 @@ pub trait DatagramXfrm {
     type Error: Debug + Display;
     /// Errors that can occur getting the header size;
     type SizeError: Debug + Display;
-    /// Type of peer addresses.
+    /// Type of counterparty addresses.
     type PeerAddr: Clone + Debug + Display + Hash + Eq + Send;
+    /// Type of the local address.
     type LocalAddr: Clone + Debug + Display + Hash + Eq + Send;
 
     /// Get the header size for sending a message to `addr`.
+    ///
+    /// # Parameters
+    ///
+    /// - `addr`: The counterparty address.
     fn header_size(
         &self,
         addr: &Self::PeerAddr
@@ -293,7 +346,7 @@ pub trait DatagramXfrm {
     ///
     /// This will wrap the message in `buf`, returning `None` if no
     /// change is made to the message, and `Some` if a new message has
-    /// been generated.  In either case, the
+    /// been generated.
     fn wrap(
         &mut self,
         msg: &[u8],
@@ -301,6 +354,12 @@ pub trait DatagramXfrm {
     ) -> Result<(Option<Vec<u8>>, Self::LocalAddr), Self::Error>;
 
     /// Unwrap the message in `buf` in-place.
+    ///
+    /// # Parameters
+    ///
+    /// - `buf`: Buffer containing the encoded message.
+    ///
+    /// - `addr`: The address from which this was receieved.
     fn unwrap(
         &mut self,
         buf: &mut [u8],
@@ -451,6 +510,48 @@ impl Session for UnixStream {
     #[inline]
     fn peer_addr(&self) -> Result<Self::PeerAddr, Error> {
         self.peer_addr().map(UnixSocketAddr::from)
+    }
+}
+
+impl<T> Session for Rc<T>
+where
+    T: Session
+{
+    type LocalAddr = T::LocalAddr;
+    type PeerAddr = T::PeerAddr;
+
+    #[inline]
+    fn local_addr(&self) -> Result<Self::LocalAddr, Error> {
+        self.as_ref().local_addr()
+    }
+
+    #[inline]
+    fn peer_addr(&self) -> Result<Self::PeerAddr, Error> {
+        self.as_ref().peer_addr()
+    }
+}
+
+impl<T> Session for RefCell<T>
+where
+    T: Session
+{
+    type LocalAddr = T::LocalAddr;
+    type PeerAddr = T::PeerAddr;
+
+    #[inline]
+    fn local_addr(&self) -> Result<Self::LocalAddr, Error> {
+        self.try_borrow()
+            .map_err(|err| Error::other(err))?
+            .deref()
+            .local_addr()
+    }
+
+    #[inline]
+    fn peer_addr(&self) -> Result<Self::PeerAddr, Error> {
+        self.try_borrow()
+            .map_err(|err| Error::other(err))?
+            .deref()
+            .peer_addr()
     }
 }
 
