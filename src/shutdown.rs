@@ -17,30 +17,28 @@
 // <https://www.gnu.org/licenses/>.
 
 //! Shutdown flags for multithreaded operation.
+use std::io::Error;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use mio::Waker;
+
 /// Shutdown flag that can be triggered manually, or by a signal.
 #[derive(Clone)]
 pub struct ShutdownFlag {
+    waker: Arc<Waker>,
     /// Atomic boolean flag.
     flag: Arc<AtomicBool>
-}
-
-impl Default for ShutdownFlag {
-    #[inline]
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl ShutdownFlag {
     /// Create a new shutdown flag.
     #[inline]
-    pub fn new() -> ShutdownFlag {
+    pub fn new(waker: Arc<Waker>) -> ShutdownFlag {
         ShutdownFlag {
-            flag: Arc::new(AtomicBool::new(false))
+            flag: Arc::new(AtomicBool::new(false)),
+            waker: waker
         }
     }
 
@@ -60,15 +58,9 @@ impl ShutdownFlag {
     ///
     /// Once set, it cannot be unset.
     #[inline]
-    pub fn set(&mut self) {
+    pub fn set(&mut self) -> Result<(), Error> {
         self.flag.store(true, Ordering::Release);
-    }
 
-    /// Get the underlying `Arc<AtomicBool>`.
-    ///
-    /// This should only be used for purposes like registering a
-    /// signal flag.
-    pub fn underlying(&self) -> Arc<AtomicBool> {
-        self.flag.clone()
+        self.waker.wake()
     }
 }

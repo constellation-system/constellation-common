@@ -29,7 +29,6 @@ use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::io::Error;
-use std::io::ErrorKind;
 use std::os::unix::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
@@ -162,7 +161,7 @@ impl TryFrom<&'_ UnixSocketAddr> for UnixSocketPath {
         let path = val
             .0
             .as_pathname()
-            .ok_or(Error::new(ErrorKind::Other, "anonymous socket"))?;
+            .ok_or(Error::other("anonymous socket"))?;
 
         Ok(UnixSocketPath(path.to_owned()))
     }
@@ -244,7 +243,7 @@ impl TryFrom<&'_ SocketAddr> for UnixSocketPath {
     fn try_from(val: &SocketAddr) -> Result<UnixSocketPath, Error> {
         let path = val
             .as_pathname()
-            .ok_or(Error::new(ErrorKind::Other, "anonymous socket address"))?;
+            .ok_or(Error::other("anonymous socket address"))?;
 
         Ok(UnixSocketPath(path.to_owned()))
     }
@@ -257,7 +256,7 @@ impl TryFrom<SocketAddr> for UnixSocketPath {
     fn try_from(val: SocketAddr) -> Result<UnixSocketPath, Error> {
         let path = val
             .as_pathname()
-            .ok_or(Error::new(ErrorKind::Other, "anonymous socket address"))?;
+            .ok_or(Error::other("anonymous socket address"))?;
 
         Ok(UnixSocketPath(path.to_owned()))
     }

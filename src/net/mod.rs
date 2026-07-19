@@ -541,7 +541,7 @@ where
     #[inline]
     fn local_addr(&self) -> Result<Self::LocalAddr, Error> {
         self.try_borrow()
-            .map_err(|err| Error::other(err))?
+            .map_err(Error::other)?
             .deref()
             .local_addr()
     }
@@ -549,7 +549,7 @@ where
     #[inline]
     fn peer_addr(&self) -> Result<Self::PeerAddr, Error> {
         self.try_borrow()
-            .map_err(|err| Error::other(err))?
+            .map_err(Error::other)?
             .deref()
             .peer_addr()
     }

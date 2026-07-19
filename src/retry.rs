@@ -985,6 +985,12 @@ impl<T> WithRetryWhen<T> {
         }
     }
 
+    /// Get the inner value.
+    #[inline]
+    pub fn get(&self) -> &T {
+        &self.val
+    }
+
     /// Deconstruct a `WithRetryWhen` into its components.
     #[inline]
     pub fn take(self) -> (T, Instant) {

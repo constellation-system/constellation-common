@@ -75,7 +75,7 @@ impl Create for TestStringCodec {
 
     #[inline]
     fn create(_config: ()) -> Result<Self, Self::CreateError> {
-        Ok(Self::default())
+        Ok(Self)
     }
 }
 
@@ -85,7 +85,7 @@ impl Create for TestBytesCodec {
 
     #[inline]
     fn create(_config: ()) -> Result<Self, Self::CreateError> {
-        Ok(Self::default())
+        Ok(Self)
     }
 }
 
@@ -171,7 +171,7 @@ impl Encoder<str> for TestStringCodec {
         &self,
         val: &str
     ) -> usize {
-        val.as_bytes().len() + 4
+        val.len() + 4
     }
 
     fn encode(
@@ -179,7 +179,7 @@ impl Encoder<str> for TestStringCodec {
         val: &str,
         buf: &mut [u8]
     ) -> Result<usize, Self::EncodeError> {
-        let len = val.as_bytes().len();
+        let len = val.len();
 
         if buf.len() >= len + 4 {
             buf[..4].copy_from_slice(&(len as u32).to_le_bytes());
@@ -188,7 +188,7 @@ impl Encoder<str> for TestStringCodec {
 
             buf[..len].copy_from_slice(val.as_bytes());
 
-            Ok(len as usize + 4)
+            Ok(len + 4)
         } else {
             Err(TooShort {
                 expected: len + 4,
@@ -223,7 +223,7 @@ impl Encoder<[u8]> for TestBytesCodec {
 
             buf[..len].copy_from_slice(val);
 
-            Ok(len as usize + 4)
+            Ok(len + 4)
         } else {
             Err(TooShort {
                 expected: len + 4,
