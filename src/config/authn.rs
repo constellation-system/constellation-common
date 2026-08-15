@@ -203,7 +203,7 @@ impl ClientGSSAPIConfig {
     ///         None,
     ///         GSSAPISecurity::Optional { seclvl: 128 }
     ///     ),
-    ///     serde_yaml::from_str(yaml).unwrap()
+    ///     yaml_serde::from_str(yaml).unwrap()
     /// );
     /// ```
     #[inline]
@@ -293,7 +293,7 @@ impl GSSAPISecurity {
     ///
     /// assert_eq!(
     ///     GSSAPISecurity::optional(128),
-    ///     serde_yaml::from_str(yaml).unwrap()
+    ///     yaml_serde::from_str(yaml).unwrap()
     /// );
     /// ```
     #[inline]
@@ -318,7 +318,7 @@ impl GSSAPISecurity {
     ///
     /// assert_eq!(
     ///     GSSAPISecurity::required(56),
-    ///     serde_yaml::from_str(yaml).unwrap()
+    ///     yaml_serde::from_str(yaml).unwrap()
     /// );
     /// ```
     #[inline]
@@ -368,7 +368,7 @@ impl ServerGSSAPIConfig {
     ///         Some(String::from("test")),
     ///         None,
     ///     ),
-    ///     serde_yaml::from_str(yaml).unwrap()
+    ///     yaml_serde::from_str(yaml).unwrap()
     /// );
     /// ```
     #[inline]
@@ -425,7 +425,7 @@ impl Default for GSSAPISecurity {
 // security: GSSAPISecurity::default()
 // }
 // };
-// let actual = serde_yaml::from_str(yaml).unwrap();
+// let actual = yaml_serde::from_str(yaml).unwrap();
 //
 // assert_eq!(expected, actual)
 // }
@@ -437,7 +437,7 @@ fn test_deserialize_server_gssapi_name() {
         name: Some(String::from("cred")),
         time_req: None
     };
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }

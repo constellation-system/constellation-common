@@ -1,8 +1,8 @@
 use std::convert::TryFrom;
 
-use asn1rs::syn::io::UperWriter;
 use asn1rs::syn::Readable;
 use asn1rs::syn::Writable;
+use asn1rs::syn::io::UperWriter;
 use constellation_common::codec::DatagramCodec;
 use constellation_common::codec::Decoder;
 use constellation_common::codec::Encoder;

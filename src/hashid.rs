@@ -31,8 +31,8 @@ use digest::Digest;
 use ripemd::Ripemd160;
 use sha2::Sha384;
 use sha3::Sha3_512;
-use skein::consts::U64;
 use skein::Skein512;
+use skein::consts::U64;
 use whirlpool::Whirlpool;
 
 use crate::codec::Encoder;

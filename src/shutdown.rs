@@ -18,9 +18,9 @@
 
 //! Shutdown flags for multithreaded operation.
 use std::io::Error;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use mio::Waker;
 

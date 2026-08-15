@@ -35,10 +35,10 @@ use asn1rs::io::per::err::Error;
 use asn1rs::io::per::unaligned::ScopedBitRead;
 use asn1rs::prelude::Reader;
 use asn1rs::prelude::Writer;
-use asn1rs::syn::io::UperReader;
-use asn1rs::syn::io::UperWriter;
 use asn1rs::syn::Readable;
 use asn1rs::syn::Writable;
+use asn1rs::syn::io::UperReader;
+use asn1rs::syn::io::UperWriter;
 
 use crate::codec::BytestreamDecoder;
 use crate::codec::BytestreamEncoder;

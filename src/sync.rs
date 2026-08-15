@@ -17,9 +17,9 @@
 // <https://www.gnu.org/licenses/>.
 
 use std::io::Error;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use mio::Waker;
 

@@ -33,13 +33,13 @@ use std::fmt::Formatter;
 use std::time::Duration;
 use std::time::Instant;
 
-use rand::thread_rng;
 use rand::Rng;
-use serde::de::Visitor;
+use rand::thread_rng;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
+use serde::de::Visitor;
 
 /// Trait for retrieving a time from retry values.
 pub trait RetryWhen {
@@ -290,7 +290,7 @@ impl Retry {
     ///     Retry::new(Duration::from_secs(10), 2.0, 1.0, 20,
     ///                1.0, Some(50), Duration::from_secs(10),
     ///                Duration::from_millis(50)),
-    ///     serde_yaml::from_str(yaml).unwrap()
+    ///     yaml_serde::from_str(yaml).unwrap()
     /// );
     /// ```
     #[inline]

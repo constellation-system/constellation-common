@@ -548,10 +548,7 @@ where
 
     #[inline]
     fn peer_addr(&self) -> Result<Self::PeerAddr, Error> {
-        self.try_borrow()
-            .map_err(Error::other)?
-            .deref()
-            .peer_addr()
+        self.try_borrow().map_err(Error::other)?.deref().peer_addr()
     }
 }
 
@@ -777,7 +774,7 @@ impl IPEndpointAddr {
     ///
     /// assert_eq!(
     ///     IPEndpointAddr::ip(IpAddr::V4(Ipv4Addr::new(10, 10, 10, 10))),
-    ///     serde_yaml::from_str(yaml).unwrap()
+    ///     yaml_serde::from_str(yaml).unwrap()
     /// );
     /// ```
     #[inline]
@@ -799,7 +796,7 @@ impl IPEndpointAddr {
     ///
     /// assert_eq!(
     ///     IPEndpointAddr::name(String::from("en.wikipedia.org")),
-    ///     serde_yaml::from_str(yaml).unwrap()
+    ///     yaml_serde::from_str(yaml).unwrap()
     /// );
     /// ```
     #[inline]
@@ -842,7 +839,7 @@ impl IPEndpoint {
     ///
     /// assert_eq!(
     ///     IPEndpoint::new(ip, 443),
-    ///     serde_yaml::from_str(yaml).unwrap()
+    ///     yaml_serde::from_str(yaml).unwrap()
     /// );
     /// ```
     #[inline]
@@ -1200,7 +1197,7 @@ fn test_deserialize_tcp_cfg_ipv4_addr() {
         addr: IPEndpointAddr::Addr(addr),
         port: 1024
     };
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
@@ -1213,7 +1210,7 @@ fn test_deserialize_tcp_cfg_ipv6_addr() {
         addr: IPEndpointAddr::Addr(IpAddr::V6(addr)),
         port: 1024
     };
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
@@ -1225,7 +1222,7 @@ fn test_deserialize_tcp_cfg_domain() {
         addr: IPEndpointAddr::Name(String::from("example.com")),
         port: 1024
     };
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
@@ -1234,7 +1231,7 @@ fn test_deserialize_tcp_cfg_domain() {
 fn test_deserialize_ip_endpoint_domain() {
     let yaml = "example.com";
     let expected = IPEndpointAddr::Name(String::from(yaml));
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
@@ -1244,7 +1241,7 @@ fn test_deserialize_ip_endpoint_ipv4() {
     let yaml = "10.10.10.10";
     let expected =
         IPEndpointAddr::Addr(IpAddr::V4(Ipv4Addr::new(10, 10, 10, 10)));
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
@@ -1254,7 +1251,7 @@ fn test_deserialize_ip_endpoint_ipv6() {
     let yaml = "1:29:3a:4b:5c:6d:7e:8f";
     let addr = Ipv6Addr::new(0x1, 0x29, 0x3a, 0x4b, 0x5c, 0x6d, 0x7e, 0x8f);
     let expected = IPEndpointAddr::Addr(IpAddr::V6(addr));
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
@@ -1264,7 +1261,7 @@ fn test_deserialize_ip_endpoint_ipv6_localhost() {
     let yaml = "::1";
     let addr = Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1);
     let expected = IPEndpointAddr::Addr(IpAddr::V6(addr));
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }

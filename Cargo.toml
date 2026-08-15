@@ -22,8 +22,7 @@ description = "Common definitions and functionality for the Constellation distri
 repository = "https://github.com/constellation-system/constellation-common"
 version = "0.0.0"
 authors = [ "Eric McCorkle <eric.mccorkle@jhuapl.edu>" ]
-edition = "2018"
-rust-version = "1.83"
+edition = "2024"
 license = "AGPL-3.0-only"
 keywords = ["distributed systems"]
 categories = ["network-programming"]
@@ -62,4 +61,4 @@ asn1rs = { version = "0.3" }
 
 [dev-dependencies]
 env_logger = { version = "0.10" }
-serde_yaml = { version = "0.9" }
+yaml_serde = { version = "0.10" }
