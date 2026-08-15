@@ -265,11 +265,15 @@ impl VersionRange {
         &self,
         version: &Version
     ) -> bool {
-        if let Some(lower) = &self.lower && version < lower {
+        if let Some(lower) = &self.lower &&
+            version < lower
+        {
             return false;
         }
 
-        if let Some(upper) = &self.upper && version > upper {
+        if let Some(upper) = &self.upper &&
+            version > upper
+        {
             return false;
         }
 

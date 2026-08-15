@@ -78,7 +78,6 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
           override: true
 
       - name: Install GSSAPI development packages
@@ -116,7 +115,6 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
           override: true
           components: clippy
 
@@ -155,7 +153,6 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
           override: true
 
       - name: Install GSSAPI development packages
@@ -253,7 +250,6 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
           override: true
 
       - name: Install GSSAPI development and LLVM-${{ env.LLVM_VERSION }}
@@ -341,7 +337,6 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
           override: true
 
       - name: Install GSSAPI development packages
@@ -391,7 +386,6 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
           override: true
 
       - name: Install GSSAPI development packages
