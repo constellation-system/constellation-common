@@ -33,6 +33,9 @@ use std::os::unix::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
 
+use serde::Deserialize;
+use serde::Serialize;
+
 use crate::net::PassthruDatagramXfrmParam;
 
 /// A wrapper around [SocketAddr]s for Unix sockets.
@@ -46,7 +49,11 @@ pub struct UnixSocketAddr(SocketAddr);
 ///
 /// This is primarily to deal with the fact that `PathBuf` does not
 /// have a [Display] instance.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
+)]
+#[serde(from = "PathBuf")]
+#[serde(into = "PathBuf")]
 pub struct UnixSocketPath(PathBuf);
 
 impl Display for UnixSocketAddr {

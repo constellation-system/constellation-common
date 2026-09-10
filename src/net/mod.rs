@@ -20,6 +20,7 @@
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::convert::Infallible;
+use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -45,7 +46,6 @@ use mio::net::TcpStream;
 use mio::net::UnixStream;
 use serde::Deserialize;
 use serde::Serialize;
-use serde::Serializer;
 
 use crate::config::CreateWithParam;
 use crate::error::ScopedError;
@@ -425,9 +425,12 @@ pub struct PassthruDatagramXfrm<Addr>(PhantomData<Addr>);
 /// address, then the result will be converted to an [IpAddr] and
 /// interpreted as such.  Otherwise, the result will be interpreted as
 /// a name, which will ultimately be resolved.
-#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
+)]
 #[serde(untagged)]
 #[serde(from = "String")]
+#[serde(into = "String")]
 pub enum IPEndpointAddr {
     /// A fixed IP address.
     ///
@@ -452,23 +455,21 @@ pub enum IPEndpointAddr {
 ///
 /// # YAML Format
 ///
-/// The YAML format has two fields, both of which are mandatory:
-///
-/// - `addr`: An [IPEndpointAddr], represented as a string.
-/// - `port`: A number, representing the port number.
+/// The YAML format is a string in a standard URL-type format.
 ///
 /// ## Examples
 ///
 /// The following is an example YAML coniguration:
 /// ```yaml
-/// addr: en.wikipedia.org
-/// port: 443
+/// en.wikipedia.org:443
 /// ```
 #[derive(
     Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize,
 )]
 #[serde(rename = "ip")]
 #[serde(rename_all = "kebab-case")]
+#[serde(try_from = "String")]
+#[serde(into = "String")]
 pub struct IPEndpoint {
     /// IP endpoint to which to connect.
     addr: IPEndpointAddr,
@@ -479,7 +480,18 @@ pub struct IPEndpoint {
 /// Creation parameter for [PassthruDatagramXfrm].
 ///
 /// This contains no information.
-#[derive(Clone, Eq, Debug, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone,
+    Eq,
+    Default,
+    Debug,
+    Deserialize,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+)]
 pub struct PassthruDatagramXfrmParam;
 
 #[derive(Clone, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -490,6 +502,12 @@ pub struct TrivialNegotiator;
 pub struct PassthruSessionNegotiation<Outcome> {
     outcome: Outcome
 }
+
+#[derive(Debug)]
+pub struct IPEndpointAddrToIPAddrErr(IPEndpointAddr);
+
+#[derive(Debug)]
+pub struct BadIPEndpoint(String);
 
 impl<Outcome> From<Outcome> for PassthruSessionNegotiation<Outcome> {
     #[inline]
@@ -641,13 +659,6 @@ impl<Stream> NegotiatorStart<Stream, Stream> for PassthruNegotiator {
         stream: Stream
     ) -> Result<Self::State, Self::StartError> {
         Ok(PassthruSessionNegotiation { outcome: stream })
-    }
-}
-
-impl Default for PassthruDatagramXfrmParam {
-    #[inline]
-    fn default() -> Self {
-        PassthruDatagramXfrmParam
     }
 }
 
@@ -833,8 +844,7 @@ impl IPEndpoint {
     /// # use constellation_common::net::IPEndpointAddr;
     /// # use constellation_common::net::IPEndpoint;
     /// #
-    /// let yaml = concat!("addr: en.wikipedia.org\n",
-    ///                    "port: 443\n");
+    /// let yaml = concat!("en.wikipedia.org:443\n");
     /// let ip = IPEndpointAddr::name(String::from("en.wikipedia.org"));
     ///
     /// assert_eq!(
@@ -1063,6 +1073,15 @@ impl From<(String, u16)> for IPEndpoint {
     }
 }
 
+impl Display for IPEndpointAddrToIPAddrErr {
+    fn fmt(
+        &self,
+        f: &mut Formatter
+    ) -> Result<(), std::fmt::Error> {
+        write!(f, "cannot convert {} to IP address", self.0)
+    }
+}
+
 impl Display for IPEndpoint {
     fn fmt(
         &self,
@@ -1081,6 +1100,15 @@ impl Display for IPEndpointAddr {
             IPEndpointAddr::Addr(addr) => write!(f, "{}", addr),
             IPEndpointAddr::Name(name) => write!(f, "{}", name)
         }
+    }
+}
+
+impl Display for BadIPEndpoint {
+    fn fmt(
+        &self,
+        f: &mut Formatter
+    ) -> Result<(), std::fmt::Error> {
+        write!(f, "invalid address format \"{}\"", self.0)
     }
 }
 
@@ -1133,6 +1161,30 @@ impl From<IpAddr> for IPEndpointAddr {
     }
 }
 
+impl TryFrom<IPEndpointAddr> for IpAddr {
+    type Error = IPEndpointAddrToIPAddrErr;
+
+    #[inline]
+    fn try_from(
+        val: IPEndpointAddr
+    ) -> Result<IpAddr, IPEndpointAddrToIPAddrErr> {
+        match val {
+            IPEndpointAddr::Addr(ip) => Ok(ip),
+            IPEndpointAddr::Name(_) => Err(IPEndpointAddrToIPAddrErr(val))
+        }
+    }
+}
+
+impl From<&'_ str> for IPEndpointAddr {
+    #[inline]
+    fn from(val: &str) -> IPEndpointAddr {
+        match IpAddr::from_str(val) {
+            Ok(addr) => IPEndpointAddr::Addr(addr),
+            Err(_) => IPEndpointAddr::Name(val.to_string())
+        }
+    }
+}
+
 impl From<String> for IPEndpointAddr {
     #[inline]
     fn from(val: String) -> IPEndpointAddr {
@@ -1150,6 +1202,49 @@ impl From<SocketAddr> for IPEndpoint {
             SocketAddr::V4(addr) => IPEndpoint::from(addr),
             SocketAddr::V6(addr) => IPEndpoint::from(addr)
         }
+    }
+}
+
+impl TryFrom<IPEndpoint> for SocketAddr {
+    type Error = IPEndpointAddrToIPAddrErr;
+
+    #[inline]
+    fn try_from(
+        val: IPEndpoint
+    ) -> Result<SocketAddr, IPEndpointAddrToIPAddrErr> {
+        let addr = val.addr.try_into()?;
+
+        Ok(SocketAddr::new(addr, val.port))
+    }
+}
+
+impl TryFrom<String> for IPEndpoint {
+    type Error = BadIPEndpoint;
+
+    #[inline]
+    fn try_from(str: String) -> Result<IPEndpoint, BadIPEndpoint> {
+        Self::try_from(str.as_str())
+    }
+}
+
+impl TryFrom<&'_ str> for IPEndpoint {
+    type Error = BadIPEndpoint;
+
+    #[inline]
+    fn try_from(str: &str) -> Result<IPEndpoint, BadIPEndpoint> {
+        let (addr, port) = match str.strip_prefix('[') {
+            Some(val) => {
+                val.split_once("]:").ok_or(BadIPEndpoint(str.to_string()))?
+            }
+            None => str.split_once(':').ok_or(BadIPEndpoint(str.to_string()))?
+        };
+        let addr = IPEndpointAddr::from(addr);
+        let port = port.parse().map_err(|_| BadIPEndpoint(str.to_string()))?;
+
+        Ok(IPEndpoint {
+            addr: addr,
+            port: port
+        })
     }
 }
 
@@ -1173,25 +1268,23 @@ impl From<SocketAddrV6> for IPEndpoint {
     }
 }
 
-impl Serialize for IPEndpointAddr {
-    fn serialize<S>(
-        &self,
-        serializer: S
-    ) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer {
-        match self {
-            IPEndpointAddr::Addr(addr) => {
-                serializer.serialize_str(&addr.to_string())
-            }
-            IPEndpointAddr::Name(name) => serializer.serialize_str(name)
-        }
+impl From<IPEndpointAddr> for String {
+    #[inline]
+    fn from(val: IPEndpointAddr) -> String {
+        val.to_string()
+    }
+}
+
+impl From<IPEndpoint> for String {
+    #[inline]
+    fn from(val: IPEndpoint) -> String {
+        val.to_string()
     }
 }
 
 #[test]
 fn test_deserialize_tcp_cfg_ipv4_addr() {
-    let yaml = concat!("addr: 10.10.10.10\n", "port: 1024");
+    let yaml = concat!("10.10.10.10:1024");
     let addr = IpAddr::V4(Ipv4Addr::new(10, 10, 10, 10));
     let expected = IPEndpoint {
         addr: IPEndpointAddr::Addr(addr),
@@ -1204,7 +1297,7 @@ fn test_deserialize_tcp_cfg_ipv4_addr() {
 
 #[test]
 fn test_deserialize_tcp_cfg_ipv6_addr() {
-    let yaml = concat!("addr: 1:29:3a:4b:5c:6d:7e:8f\n", "port: 1024");
+    let yaml = concat!("\'[1:29:3a:4b:5c:6d:7e:8f]:1024\'");
     let addr = Ipv6Addr::new(0x1, 0x29, 0x3a, 0x4b, 0x5c, 0x6d, 0x7e, 0x8f);
     let expected = IPEndpoint {
         addr: IPEndpointAddr::Addr(IpAddr::V6(addr)),
@@ -1217,7 +1310,7 @@ fn test_deserialize_tcp_cfg_ipv6_addr() {
 
 #[test]
 fn test_deserialize_tcp_cfg_domain() {
-    let yaml = concat!("addr: example.com\n", "port: 1024");
+    let yaml = concat!("example.com:1024");
     let expected = IPEndpoint {
         addr: IPEndpointAddr::Name(String::from("example.com")),
         port: 1024

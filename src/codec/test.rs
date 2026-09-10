@@ -31,6 +31,7 @@ use std::string::FromUtf8Error;
 
 use crate::codec::BytestreamDecoder;
 use crate::codec::BytestreamEncoder;
+use crate::codec::DatagramCodec;
 use crate::codec::Decoder;
 use crate::codec::Encoder;
 use crate::config::Create;
@@ -125,6 +126,10 @@ impl Decoder<String> for TestStringCodec {
             })
         }
     }
+}
+
+impl DatagramCodec<Vec<u8>> for TestBytesCodec {
+    const MAX_BYTES: usize = 1024;
 }
 
 impl Decoder<Vec<u8>> for TestBytesCodec {
@@ -273,7 +278,7 @@ impl Encoder<Vec<u8>> for TestBytesCodec {
     }
 }
 
-impl BytestreamDecoder<Vec<u8>> for TestStringCodec {
+impl BytestreamDecoder<Vec<u8>> for TestBytesCodec {
     type StreamDecodeError = TestReadError;
 
     fn decode_from_stream<R>(

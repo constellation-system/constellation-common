@@ -174,6 +174,9 @@ pub enum ErrorScope {
     WouldBlock
 }
 
+#[derive(Debug)]
+pub struct CompletableIOError;
+
 /// Common type used to indicate mutex poisoning.
 #[derive(Debug)]
 pub struct MutexPoison;
@@ -309,13 +312,15 @@ impl RecoverableError for Infallible {
 }
 
 impl RecoverableError for std::io::Error {
-    type Completable = ();
+    type Completable = CompletableIOError;
     type Permanent = std::io::Error;
 
     #[inline]
     fn split(self) -> (Option<Self::Completable>, Option<Self::Permanent>) {
         match self.kind() {
-            ErrorKind::WouldBlock | ErrorKind::Interrupted => (Some(()), None),
+            ErrorKind::WouldBlock | ErrorKind::Interrupted => {
+                (Some(CompletableIOError), None)
+            }
             _ => (None, Some(self))
         }
     }
@@ -382,7 +387,15 @@ impl ScopedError for Infallible {
 impl ScopedError for Error {
     #[inline]
     fn scope(&self) -> ErrorScope {
+        // XXX This needs to be expanded out
         ErrorScope::Msg
+    }
+}
+
+impl ScopedError for CompletableIOError {
+    #[inline]
+    fn scope(&self) -> ErrorScope {
+        ErrorScope::WouldBlock
     }
 }
 
@@ -461,6 +474,15 @@ impl Display for ErrorScope {
             ErrorScope::Shutdown => write!(f, "shutdown"),
             ErrorScope::Unrecoverable => write!(f, "unrecoverable")
         }
+    }
+}
+
+impl Display for CompletableIOError {
+    fn fmt(
+        &self,
+        f: &mut Formatter<'_>
+    ) -> Result<(), std::fmt::Error> {
+        write!(f, "completable IO error")
     }
 }
 
