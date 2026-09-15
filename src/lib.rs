@@ -51,6 +51,7 @@ pub mod sched;
 pub mod shutdown;
 pub mod sync;
 pub mod unix;
+pub mod util;
 pub mod version;
 
 #[cfg(test)]

@@ -45,7 +45,7 @@ pub trait RecoverableError: Sized {
     /// Type of permanent errors.
     ///
     /// These represent conditions that cannot be recovered from.
-    type Permanent: Debug + Display + ScopedError;
+    type Permanent: Display + ScopedError;
     /// Type of errors that can be retried.
     type Completable;
 
