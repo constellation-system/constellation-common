@@ -56,6 +56,23 @@ impl<T> LazyInitVec<T> {
         }
     }
 
+    pub fn append(
+        &mut self,
+        val: &mut Vec<T>
+    ) {
+        match self {
+            LazyInitVec::Full(vec) => {
+                vec.append(val);
+            }
+            LazyInitVec::Empty(size) => {
+                let mut vec = Vec::with_capacity(*size);
+
+                vec.append(val);
+                *self = LazyInitVec::Full(vec);
+            }
+        }
+    }
+
     #[inline]
     pub fn take(self) -> Option<Vec<T>> {
         match self {

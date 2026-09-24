@@ -40,6 +40,8 @@ use std::net::SocketAddrV6;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::str::FromStr;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Instant;
 
 use mio::net::TcpStream;
@@ -49,6 +51,7 @@ use serde::Serialize;
 
 use crate::config::CreateWithParam;
 use crate::error::ScopedError;
+use crate::error::WithMutexPoison;
 use crate::unix::UnixSocketAddr;
 
 pub mod test;
@@ -582,6 +585,46 @@ impl Session for TcpStream {
     #[inline]
     fn peer_addr(&self) -> Result<Self::PeerAddr, Error> {
         self.peer_addr()
+    }
+}
+
+impl<T, Party, Msg> SharedMsgs<Party, Msg> for Arc<Mutex<T>>
+where
+    T: SharedMsgs<Party, Msg>
+{
+    type MsgsError = WithMutexPoison<T::MsgsError>;
+
+    #[inline]
+    fn msgs(
+        &mut self,
+        live: &HashSet<Party>,
+        now: Instant
+    ) -> Result<
+        (Option<Vec<(Vec<Party>, Vec<Msg>)>>, Option<Instant>),
+        Self::MsgsError
+    > {
+        self.lock()
+            .map_err(|_| WithMutexPoison::MutexPoison)?
+            .msgs(live, now)
+            .map_err(|err| WithMutexPoison::Inner { err: err })
+    }
+}
+
+impl<T, Msg> PrivateMsgs<Msg> for Arc<Mutex<T>>
+where
+    T: PrivateMsgs<Msg>
+{
+    type MsgsError = WithMutexPoison<T::MsgsError>;
+
+    #[inline]
+    fn msgs(
+        &mut self,
+        now: Instant
+    ) -> Result<(Option<Vec<Msg>>, Option<Instant>), Self::MsgsError> {
+        self.lock()
+            .map_err(|_| WithMutexPoison::MutexPoison)?
+            .msgs(now)
+            .map_err(|err| WithMutexPoison::Inner { err: err })
     }
 }
 

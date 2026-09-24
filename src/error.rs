@@ -275,6 +275,29 @@ impl PartialOrd for ErrorScope {
     }
 }
 
+impl<Inner> RecoverableError for WithMutexPoison<Inner>
+where
+    Inner: RecoverableError
+{
+    type Completable = Inner::Completable;
+    type Permanent = WithMutexPoison<Inner::Permanent>;
+
+    fn split(self) -> (Option<Self::Completable>, Option<Self::Permanent>) {
+        match self {
+            WithMutexPoison::Inner { err } => {
+                let (completable, permanent) = err.split();
+                let permanent =
+                    permanent.map(|err| WithMutexPoison::Inner { err: err });
+
+                (completable, permanent)
+            }
+            WithMutexPoison::MutexPoison => {
+                (None, Some(WithMutexPoison::MutexPoison))
+            }
+        }
+    }
+}
+
 impl<Encode, Write> RecoverableError for CodecStreamError<Encode, Write>
 where
     Encode: Debug + Display,
