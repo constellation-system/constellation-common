@@ -1221,19 +1221,29 @@ impl TryFrom<IPEndpointAddr> for IpAddr {
 impl From<&'_ str> for IPEndpointAddr {
     #[inline]
     fn from(val: &str) -> IPEndpointAddr {
-        match IpAddr::from_str(val) {
-            Ok(addr) => IPEndpointAddr::Addr(addr),
-            Err(_) => IPEndpointAddr::Name(val.to_string())
-        }
+        let Ok(out) = val.parse();
+
+        out
     }
 }
 
 impl From<String> for IPEndpointAddr {
     #[inline]
     fn from(val: String) -> IPEndpointAddr {
-        match IpAddr::from_str(&val) {
-            Ok(addr) => IPEndpointAddr::Addr(addr),
-            Err(_) => IPEndpointAddr::Name(val)
+        let Ok(out) = val.parse();
+
+        out
+    }
+}
+
+impl FromStr for IPEndpointAddr {
+    type Err = Infallible;
+
+    #[inline]
+    fn from_str(str: &str) -> Result<IPEndpointAddr, Infallible> {
+        match IpAddr::from_str(str) {
+            Ok(addr) => Ok(IPEndpointAddr::Addr(addr)),
+            Err(_) => Ok(IPEndpointAddr::Name(str.to_string()))
         }
     }
 }
@@ -1275,11 +1285,21 @@ impl TryFrom<&'_ str> for IPEndpoint {
 
     #[inline]
     fn try_from(str: &str) -> Result<IPEndpoint, BadIPEndpoint> {
+        str.parse()
+    }
+}
+
+impl FromStr for IPEndpoint {
+    type Err = BadIPEndpoint;
+
+    fn from_str(str: &str) -> Result<IPEndpoint, BadIPEndpoint> {
         let (addr, port) = match str.strip_prefix('[') {
             Some(val) => {
                 val.split_once("]:").ok_or(BadIPEndpoint(str.to_string()))?
             }
-            None => str.split_once(':').ok_or(BadIPEndpoint(str.to_string()))?
+            None => {
+                str.rsplit_once(':').ok_or(BadIPEndpoint(str.to_string()))?
+            }
         };
         let addr = IPEndpointAddr::from(addr);
         let port = port.parse().map_err(|_| BadIPEndpoint(str.to_string()))?;
