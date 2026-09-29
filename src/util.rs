@@ -16,6 +16,7 @@
 // License along with this program.  If not, see
 // <https://www.gnu.org/licenses/>.
 
+use std::collections::BinaryHeap;
 use std::collections::HashSet;
 use std::hash::Hash;
 
@@ -30,6 +31,14 @@ pub enum LazyInitHashSet<T>
 where
     T: Eq + Hash {
     Full(HashSet<T>),
+    Empty(usize)
+}
+
+#[derive(Clone, Debug)]
+pub enum LazyInitBinaryHeap<T>
+where
+    T: Eq + Ord {
+    Full(BinaryHeap<T>),
     Empty(usize)
 }
 
@@ -96,14 +105,31 @@ where
         val: T
     ) {
         match self {
-            LazyInitHashSet::Full(vec) => {
-                vec.insert(val);
+            LazyInitHashSet::Full(set) => {
+                set.insert(val);
             }
             LazyInitHashSet::Empty(size) => {
-                let mut vec = HashSet::with_capacity(*size);
+                let mut set = HashSet::with_capacity(*size);
 
-                vec.insert(val);
-                *self = LazyInitHashSet::Full(vec);
+                set.insert(val);
+                *self = LazyInitHashSet::Full(set);
+            }
+        }
+    }
+
+    pub fn extend(
+        &mut self,
+        val: Vec<T>
+    ) {
+        match self {
+            LazyInitHashSet::Full(set) => {
+                set.extend(val);
+            }
+            LazyInitHashSet::Empty(size) => {
+                let mut set = HashSet::with_capacity(*size);
+
+                set.extend(val);
+                *self = LazyInitHashSet::Full(set);
             }
         }
     }
@@ -113,6 +139,58 @@ where
         match self {
             LazyInitHashSet::Full(out) => Some(out),
             LazyInitHashSet::Empty(_) => None
+        }
+    }
+}
+
+impl<T> LazyInitBinaryHeap<T>
+where
+    T: Eq + Ord
+{
+    #[inline]
+    pub fn new(size_hint: usize) -> Self {
+        LazyInitBinaryHeap::Empty(size_hint)
+    }
+
+    pub fn push(
+        &mut self,
+        val: T
+    ) {
+        match self {
+            LazyInitBinaryHeap::Full(heap) => {
+                heap.push(val);
+            }
+            LazyInitBinaryHeap::Empty(size) => {
+                let mut heap = BinaryHeap::with_capacity(*size);
+
+                heap.push(val);
+                *self = LazyInitBinaryHeap::Full(heap);
+            }
+        }
+    }
+
+    pub fn extend(
+        &mut self,
+        val: Vec<T>
+    ) {
+        match self {
+            LazyInitBinaryHeap::Full(heap) => {
+                heap.extend(val);
+            }
+            LazyInitBinaryHeap::Empty(size) => {
+                let mut heap = BinaryHeap::with_capacity(*size);
+
+                heap.extend(val);
+                *self = LazyInitBinaryHeap::Full(heap);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn take(self) -> Option<BinaryHeap<T>> {
+        match self {
+            LazyInitBinaryHeap::Full(out) => Some(out),
+            LazyInitBinaryHeap::Empty(_) => None
         }
     }
 }
