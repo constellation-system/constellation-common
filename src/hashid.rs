@@ -220,6 +220,16 @@ pub enum CompoundHashID {
     Whirlpool { whirlpool: WhirlpoolID }
 }
 
+impl Create for RipeMD160Algo {
+    type Config = ();
+    type CreateError = Infallible;
+
+    #[inline]
+    fn create(_config: Self::Config) -> Result<Self, Self::CreateError> {
+        Ok(RipeMD160Algo)
+    }
+}
+
 impl HashAlgo for RipeMD160Algo {
     type HashID = RipeMD160ID;
 
@@ -290,6 +300,16 @@ impl Display for RipeMD160ID {
     }
 }
 
+impl Create for Blake2bAlgo {
+    type Config = ();
+    type CreateError = Infallible;
+
+    #[inline]
+    fn create(_config: Self::Config) -> Result<Self, Self::CreateError> {
+        Ok(Blake2bAlgo)
+    }
+}
+
 impl HashAlgo for Blake2bAlgo {
     type HashID = Blake2bID;
 
@@ -357,6 +377,16 @@ impl Display for Blake2bID {
         }
 
         Ok(())
+    }
+}
+
+impl Create for SHA3Algo {
+    type Config = ();
+    type CreateError = Infallible;
+
+    #[inline]
+    fn create(_config: Self::Config) -> Result<Self, Self::CreateError> {
+        Ok(SHA3Algo)
     }
 }
 
@@ -500,6 +530,16 @@ impl Display for SHA384ID {
     }
 }
 
+impl Create for SkeinAlgo {
+    type Config = ();
+    type CreateError = Infallible;
+
+    #[inline]
+    fn create(_config: Self::Config) -> Result<Self, Self::CreateError> {
+        Ok(SkeinAlgo)
+    }
+}
+
 impl HashAlgo for SkeinAlgo {
     type HashID = SkeinID;
 
@@ -567,6 +607,16 @@ impl Display for SkeinID {
         }
 
         Ok(())
+    }
+}
+
+impl Create for WhirlpoolAlgo {
+    type Config = ();
+    type CreateError = Infallible;
+
+    #[inline]
+    fn create(_config: Self::Config) -> Result<Self, Self::CreateError> {
+        Ok(WhirlpoolAlgo)
     }
 }
 
