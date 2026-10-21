@@ -19,26 +19,46 @@
 //! Shutdown flags for multithreaded operation.
 use std::io::Error;
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use mio::Waker;
 
+use crate::error::MutexPoison;
+use crate::error::WithMutexPoison;
+
 /// Shutdown flag that can be triggered manually, or by a signal.
 #[derive(Clone)]
 pub struct ShutdownFlag {
-    waker: Arc<Waker>,
+    wakers: Arc<RwLock<Vec<Arc<Waker>>>>,
     /// Atomic boolean flag.
     flag: Arc<AtomicBool>
+}
+
+impl Default for ShutdownFlag {
+    #[inline]
+    fn default() -> Self {
+        ShutdownFlag {
+            flag: Arc::new(AtomicBool::new(false)),
+            wakers: Arc::new(RwLock::new(Vec::new()))
+        }
+    }
 }
 
 impl ShutdownFlag {
     /// Create a new shutdown flag.
     #[inline]
-    pub fn new(waker: Arc<Waker>) -> ShutdownFlag {
+    pub fn new() -> ShutdownFlag {
+        Self::default()
+    }
+
+    /// Create a new shutdown flag.
+    #[inline]
+    pub fn with_capacity(size: usize) -> ShutdownFlag {
         ShutdownFlag {
             flag: Arc::new(AtomicBool::new(false)),
-            waker: waker
+            wakers: Arc::new(RwLock::new(Vec::with_capacity(size)))
         }
     }
 
@@ -54,13 +74,31 @@ impl ShutdownFlag {
         self.flag.load(Ordering::Acquire)
     }
 
+    /// Register a new [Waker].
+    #[inline]
+    pub fn add_waker(
+        &mut self,
+        waker: Arc<Waker>
+    ) -> Result<(), MutexPoison> {
+        self.wakers.write().map_err(|_| MutexPoison)?.push(waker);
+
+        Ok(())
+    }
+
     /// Set the shutdown status on this flag.
     ///
     /// Once set, it cannot be unset.
     #[inline]
-    pub fn set(&mut self) -> Result<(), Error> {
+    pub fn set(&mut self) -> Result<(), WithMutexPoison<Error>> {
         self.flag.store(true, Ordering::Release);
-
-        self.waker.wake()
+        self.wakers
+            .read()
+            .map_err(|_| WithMutexPoison::MutexPoison)?
+            .iter()
+            .try_for_each(|waker| {
+                waker
+                    .wake()
+                    .map_err(|err| WithMutexPoison::Inner { err: err })
+            })
     }
 }
