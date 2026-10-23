@@ -24,6 +24,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::io::ErrorKind;
 use std::string::FromUtf8Error;
+use std::sync::mpsc::RecvError;
+use std::sync::mpsc::SendError;
 
 use asn1rs::io::per::err::Error;
 use log::error;
@@ -467,6 +469,20 @@ where
             WithMutexPoison::Inner { err } => err.scope(),
             WithMutexPoison::MutexPoison => ErrorScope::Unrecoverable
         }
+    }
+}
+
+impl<T> ScopedError for SendError<T> {
+    #[inline]
+    fn scope(&self) -> ErrorScope {
+        ErrorScope::Shutdown
+    }
+}
+
+impl ScopedError for RecvError {
+    #[inline]
+    fn scope(&self) -> ErrorScope {
+        ErrorScope::Shutdown
     }
 }
 
