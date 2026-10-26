@@ -23,15 +23,14 @@ use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-use mio::Waker;
-
 use crate::error::MutexPoison;
 use crate::error::WithMutexPoison;
+use crate::sync::Notify;
 
 /// Shutdown flag that can be triggered manually, or by a signal.
 #[derive(Clone)]
 pub struct ShutdownFlag {
-    wakers: Arc<RwLock<Vec<Arc<Waker>>>>,
+    notifies: Arc<RwLock<Vec<Notify>>>,
     /// Atomic boolean flag.
     flag: Arc<AtomicBool>
 }
@@ -41,7 +40,7 @@ impl Default for ShutdownFlag {
     fn default() -> Self {
         ShutdownFlag {
             flag: Arc::new(AtomicBool::new(false)),
-            wakers: Arc::new(RwLock::new(Vec::new()))
+            notifies: Arc::new(RwLock::new(Vec::new()))
         }
     }
 }
@@ -58,7 +57,7 @@ impl ShutdownFlag {
     pub fn with_capacity(size: usize) -> ShutdownFlag {
         ShutdownFlag {
             flag: Arc::new(AtomicBool::new(false)),
-            wakers: Arc::new(RwLock::new(Vec::with_capacity(size)))
+            notifies: Arc::new(RwLock::new(Vec::with_capacity(size)))
         }
     }
 
@@ -76,11 +75,11 @@ impl ShutdownFlag {
 
     /// Register a new [Waker].
     #[inline]
-    pub fn add_waker(
+    pub fn add_notify(
         &mut self,
-        waker: Arc<Waker>
+        notify: Notify
     ) -> Result<(), MutexPoison> {
-        self.wakers.write().map_err(|_| MutexPoison)?.push(waker);
+        self.notifies.write().map_err(|_| MutexPoison)?.push(notify);
 
         Ok(())
     }
@@ -91,13 +90,13 @@ impl ShutdownFlag {
     #[inline]
     pub fn set(&mut self) -> Result<(), WithMutexPoison<Error>> {
         self.flag.store(true, Ordering::Release);
-        self.wakers
+        self.notifies
             .read()
             .map_err(|_| WithMutexPoison::MutexPoison)?
             .iter()
             .try_for_each(|waker| {
                 waker
-                    .wake()
+                    .notify()
                     .map_err(|err| WithMutexPoison::Inner { err: err })
             })
     }

@@ -25,19 +25,45 @@ use mio::Waker;
 
 #[derive(Clone)]
 pub struct Notify {
+    waker: Arc<Waker>
+}
+
+#[derive(Clone)]
+pub struct NotifyFlag {
     waker: Arc<Waker>,
     flag: Arc<AtomicBool>
 }
 
-#[derive(Clone)]
-pub struct NotifyRecv {
-    flag: Arc<AtomicBool>
+impl From<NotifyFlag> for Notify {
+    #[inline]
+    fn from(val: NotifyFlag) -> Self {
+        Notify::from(&val)
+    }
 }
 
-impl From<Notify> for NotifyRecv {
+impl From<&'_ NotifyFlag> for Notify {
+    #[inline]
+    fn from(val: &NotifyFlag) -> Self {
+        Notify {
+            waker: val.waker.clone()
+        }
+    }
+}
+
+impl From<Notify> for NotifyFlag {
     #[inline]
     fn from(val: Notify) -> Self {
-        NotifyRecv { flag: val.flag }
+        NotifyFlag::from(&val)
+    }
+}
+
+impl From<&'_ Notify> for NotifyFlag {
+    #[inline]
+    fn from(val: &Notify) -> Self {
+        NotifyFlag {
+            flag: Arc::new(AtomicBool::new(false)),
+            waker: val.waker.clone()
+        }
     }
 }
 
@@ -45,29 +71,25 @@ impl Notify {
     /// Create a new `Notify`.
     #[inline]
     pub fn new(waker: Arc<Waker>) -> Self {
-        Notify {
-            flag: Arc::new(AtomicBool::new(false)),
-            waker: waker
-        }
+        Notify { waker: waker }
     }
 
     /// Send the notification.
     #[inline]
     pub fn notify(&self) -> Result<(), Error> {
-        self.flag.store(true, Ordering::Release);
+        self.waker.wake()
+    }
+}
 
+impl NotifyFlag {
+    /// Send the notification.
+    #[inline]
+    pub fn notify(&self) -> Result<(), Error> {
+        self.flag.store(true, Ordering::Release);
         self.waker.wake()
     }
 
     /// Clear the notification, and return whether it was set.
-    #[inline]
-    pub fn collect(&self) -> bool {
-        self.flag.swap(false, Ordering::AcqRel)
-    }
-}
-
-impl NotifyRecv {
-    /// Check if the notification is set, and clear the notification.
     #[inline]
     pub fn collect(&self) -> bool {
         self.flag.swap(false, Ordering::AcqRel)
