@@ -28,6 +28,8 @@
 //! - It allows more precise control over the exact message formats.
 //!
 //! - It facilitates the use of encoding formats such as ASN.1 PER.
+
+use std::convert::Infallible;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -37,6 +39,7 @@ use std::io::Write;
 pub mod per;
 pub mod test;
 
+use crate::config::Create;
 use crate::error::ErrorScope;
 use crate::error::ScopedError;
 
@@ -205,6 +208,26 @@ pub struct ISizeCodec;
 /// Error indicating the buffer was too short.
 #[derive(Debug)]
 pub struct TooShort;
+
+impl Create for USizeCodec {
+    type Config = ();
+    type CreateError = Infallible;
+
+    #[inline]
+    fn create(_config: ()) -> Result<Self, Self::CreateError> {
+        Ok(USizeCodec)
+    }
+}
+
+impl Create for ISizeCodec {
+    type Config = ();
+    type CreateError = Infallible;
+
+    #[inline]
+    fn create(_config: ()) -> Result<Self, Self::CreateError> {
+        Ok(ISizeCodec)
+    }
+}
 
 impl Decoder<usize> for USizeCodec {
     type DecodeError = TooShort;
