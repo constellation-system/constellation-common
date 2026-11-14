@@ -4,7 +4,7 @@ run-name: Push to ${{ github.ref_name }} by ${{ github.actor }}
 
 env:
   LINT_FLAGS: -W clippy::all -W clippy::pedantic -W clippy::cargo
-  RUST_TOOLCHAIN: 'nightly-2024-11-28'
+  RUST_NIGHTLY_TOOLCHAIN: 'nightly-2026-08-14'
   LLVM_VERSION: 19
 
 on:
@@ -38,7 +38,7 @@ jobs:
       - name: Setup toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          toolchain: ${{ env.RUST_NIGHTLY_TOOLCHAIN }}
           profile: minimal
           override: true
           components: rustfmt
