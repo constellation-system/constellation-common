@@ -26,6 +26,7 @@ header:
   paths-ignore:
     - '.github/**'
     - 'target/**'
+    - 'tests/data/**'
     - 'test/data/certs/*'
     - 'gen_test_certs.sh'
     - 'build.rs'

@@ -23,10 +23,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         env:
           cache-name: cache-rust-crates
         with:
@@ -62,10 +62,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         env:
           cache-name: cache-rust-crates
         with:
@@ -99,10 +99,10 @@ jobs:
       checks: write
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         env:
           cache-name: cache-rust-crates
         with:
@@ -137,10 +137,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         env:
           cache-name: cache-rust-crates
         with:
@@ -179,10 +179,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         env:
           cache-name: cache-rust-crates
         with:
@@ -202,10 +202,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         env:
           cache-name: cache-rust-crates
         with:
@@ -234,10 +234,10 @@ jobs:
         os: [ubuntu-24.04, macos-14]
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         env:
           cache-name: cache-rust-crates
         with:
@@ -321,10 +321,10 @@ jobs:
         os: [ubuntu-24.04, macos-14]
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         env:
           cache-name: cache-rust-crates
         with:
@@ -401,10 +401,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         env:
           cache-name: cache-rust-crates
         with:
