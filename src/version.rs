@@ -16,6 +16,26 @@
 // License along with this program.  If not, see
 // <https://www.gnu.org/licenses/>.
 
+//! Structured representation of versions.
+//!
+//! This module contains types for representing versions and ranges of
+//! versions.  The primary types of interest are:
+//!
+//! - [`Version`]: Representation of a simple numerical version of the
+//!   form `major.minor.subminor`.  This is suitable for most
+//!   programmatic uses.
+//!
+//! - [`FullVersion`]: Representation of a version with additional
+//!   annotations, such as release candidacy.
+//!
+//! - [`VersionRange`]: Representation of a range of `Version`s, with
+//!   version-matching capability.
+//!
+//! Each of these types can be parsed from strings, permitting easy
+//! representation in a configuration file.  The `Version` type also
+//! has an ASN.1 representation and a [`PERCodec`] instance, allowing
+//! it to be serialized and deserialized.
+
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::fmt::Display;
@@ -24,13 +44,154 @@ use std::fmt::Formatter;
 use std::string::ToString;
 
 use crate::codec::per::PERCodec;
+
+/// Representation of a simple version consisting of a
+/// `major.minor.subminor` triple.
+///
+/// This representation is a standard form used in software versioning
+/// for decades.  The "semantic versioning" scheme is the latest
+/// iteration of this scheme.  In this scheme, a `Version` consists of
+/// three numerical components:
+///
+/// - **Major**: Represents significant or breaking changes without
+///   expectation of back-compatibility, generally requiring
+///   significant effort to update dependencies.
+///
+/// - **Minor**: Represents new features, significant changes in
+///   behavior, and structural fixes that maintain backward
+///   compatibility.
+///
+/// - **Sub-minor**: Also called "patch".  Represents minor fixes,
+///   performance improvements, and other changes that should maintain
+///   both API and beharioral compatibility.
+///
+/// # Limitations
+///
+/// This type imposes range limits on these numbers in order to
+/// facilitate binary representations:
+///
+/// - Major: `[0 .. 1023]`
+/// - Minor: `[0 .. 1023]`
+/// - Subminor: `[0 .. 4095]`
+///
+/// # Representations
+///
+/// A `Version` has two representations from which it can be created:
+///
+/// - [`VersionConfig`](crate::config::VersionConfig): `Version` has
+///   [`From`] and [`Into`] instances with `VersionConfig`.  The latter
+///   can be parsed from a string, permitting easy use in a configuration
+///   file.
+///
+/// - [`VersionPERCodec`]: A [`PERCodec`] instance, `VersionPERCodec`
+///   can be used to serialize and deserialize a `Version` as a dense
+///   binary format, suitable for storage and network communications.
+///
+/// ## ASN.1 Representation
+///
+/// This type is generated from the following ASN.1 representation:
+///
+/// ```asn1
+/// Version ::= SEQUENCE {
+///     major INTEGER (0 .. 1023),
+///     minor INTEGER (0 .. 1023),
+///     sub INTEGER(0 .. 4095)
+/// }
+/// ```
 pub use crate::generated::version::Version;
+
+/// Representation of a range of [`Version`]s.
+///
+/// This type describes a range of `Version`s and provides
+/// functionality for checking if a `Version` falls within the range.
+/// This is useful for checking versions as part of a protocol, or for
+/// other similar uses.
+///
+/// # Representations
+///
+/// A `VersionRange` has [`From`] and [`Into`] instances with
+/// `VersionRangeConfig`.  The latter can be parsed from a string,
+/// permitting easy use in a configuration file.
+///
+/// ## ASN.1 Representation
+///
+/// This type is generated from the following ASN.1 representation:
+///
+/// ```asn1
+/// VersionRange ::= SEQUENCE {
+///     lower VersionRangeElem OPTIONAL,
+///     upper VersionRangeElem OPTIONAL
+/// }
+/// ```
+///
+/// See [`VersionRangeElem`] for its ASN.1 representation.
 pub use crate::generated::version::VersionRange;
+
+/// Representation of a [`VersionRange`] element, which serves as
+/// one of the two endpoints to the range.
+///
+/// # ASN.1 Representation
+///
+/// This type is generated from the following ASN.1 representation:
+///
+/// ```asn1
+/// VersionRangeElem ::= CHOICE {
+///     Major VersionRangeElemMajor,
+///     Minor VersionRangeElemMinor,
+///     Sub VersionRangeElemSub
+/// }
+/// ```
+///
+/// See [`VersionRangeElemMajor`], [`VersionRangeElemMinor`], and
+/// [`VersionRangeElemSub`] for their ASN.1 representations.
 pub use crate::generated::version::VersionRangeElem;
+
+/// Representation of a [`VersionRangeElem`] element that matches only
+/// the major number.
+///
+/// # ASN.1 Representation
+///
+/// This type is generated from the following ASN.1 representation:
+///
+/// ```asn1
+/// VersionRangeElemMajor ::= SEQUENCE {
+///     major INTEGER (0 .. 1023)
+/// }
+/// ```
 pub use crate::generated::version::VersionRangeElemMajor;
+
+/// Representation of a [`VersionRangeElem`] element that matches the
+/// major and minor numbers.
+///
+/// # ASN.1 Representation
+///
+/// This type is generated from the following ASN.1 representation:
+///
+/// ```asn1
+/// VersionRangeElemMinor ::= SEQUENCE {
+///     major INTEGER (0 .. 1023),
+///     minor INTEGER (0 .. 1023)
+/// }
+/// ```
 pub use crate::generated::version::VersionRangeElemMinor;
+
+/// Representation of a [`VersionRangeElem`] element that matches all of
+/// the major, minor and sub-minor numbers.
+///
+/// # ASN.1 Representation
+///
+/// This type is generated from the following ASN.1 representation:
+///
+/// ```asn1
+/// VersionRangeElemSub ::= SEQUENCE {
+///     major INTEGER (0 .. 1023),
+///     minor INTEGER (0 .. 1023),
+///     sub INTEGER(0 .. 4095)
+/// }
+/// ```
 pub use crate::generated::version::VersionRangeElemSub;
 
+/// [`PERCodec`] for encoding and decoding [`Version`]s.
 pub type VersionPERCodec = PERCodec<Version, 32>;
 
 /// Suffixes attached to a version, indicating the stage of the
@@ -72,8 +233,20 @@ pub enum VersionSuffix {
 /// Full application version.
 ///
 /// This is a full version, intended for use by applications.  It
-/// includes additional information not meant to be sent over a
-/// network or compared for compatibility determinations.
+/// includes additional information intended for human readers and not
+/// meant to be sent over a network or compared for compatibility
+/// determinations.
+///
+/// A `FullVersion` consists of the following information:
+///
+/// - **Prefix**: An informational string, often used to denote
+///   special build parameters, certifications, or constraints.  This
+///   is optional.
+///
+/// - **Version Number**: A [`Version`], representing the core version.
+///
+/// - **Suffix**: A [`VersionSuffix`], denoting the stage in the
+///   development cycle  This is optional.
 pub struct FullVersion {
     /// Informational prefix, added to indicate special status or options.
     ///
@@ -85,16 +258,31 @@ pub struct FullVersion {
     suffix: Option<VersionSuffix>
 }
 
+/// Error representing an invalid version string representation.
 #[derive(Debug)]
 pub struct BadVersionString(String);
 
+/// Error representing an invalid version range string representation.
 #[derive(Debug)]
 pub struct BadVersionRangeString(String);
 
+/// Error representing an invalid range element string representation.
 #[derive(Debug)]
 pub struct BadVersionRangeElemString(String);
 
 impl FullVersion {
+    /// Create a `FullVersion` from its components.
+    ///
+    /// # Parameters
+    ///
+    /// - `prefix`: The version prefix, or `None`.  This is an
+    ///   informational string, often used to denote special build
+    ///   parameters, certifications, or constraints.
+    ///
+    /// - `version`: The version number.  This represents the core version.
+    ///
+    /// - `suffix`: The version suffix, or `None`.  This denotes the
+    ///   stage in the development cycle.
     #[inline]
     pub const fn new(
         prefix: Option<&'static str>,
@@ -108,16 +296,24 @@ impl FullVersion {
         }
     }
 
+    /// Get the version prefix, if there is one.
+    ///
+    /// This is an informational string, often used to denote special
+    /// build parameters, certifications, or constraints.
     #[inline]
     pub const fn prefix(&self) -> Option<&'static str> {
         self.prefix
     }
 
+    /// Get the core version.
     #[inline]
     pub const fn core_version(&self) -> &Version {
         &self.version
     }
 
+    /// Get the version suffix.
+    ///
+    /// This denotes the stage in the development cycle.
     #[inline]
     pub const fn suffix(&self) -> Option<&VersionSuffix> {
         self.suffix.as_ref()
@@ -126,6 +322,20 @@ impl FullVersion {
 
 impl Version {
     /// Create a new `Version` from the version components.
+    ///
+    /// # Parameters
+    ///
+    /// - `major`: Major version number.  This represents significant
+    ///   or breaking changes without expectation of back-compatibility,
+    ///   generally requiring significant effort to update dependencies.
+    ///
+    /// - `minor`: Minor version number.  This represents new
+    ///   features, significant changes in behavior, and structural
+    ///   fixes that maintain backward compatibility.
+    ///
+    /// - `sub`: Sub-minor version number.  This represents minor
+    ///   fixes, performance improvements, and other changes that should
+    ///   maintain both API and beharioral compatibility.
     #[inline]
     pub const fn new(
         major: u16,
@@ -133,6 +343,109 @@ impl Version {
         sub: u16
     ) -> Self {
         Version {
+            major: major,
+            minor: minor,
+            sub: sub
+        }
+    }
+
+    /// Get the major version number.
+    ///
+    /// This represents significant or breaking changes without
+    /// expectation of back-compatibility, generally requiring
+    /// significant effort to update dependencies.
+    #[inline]
+    pub const fn major(&self) -> u16 {
+        self.major
+    }
+
+    /// Get the minor version number.
+    ///
+    /// This represents new features, significant changes in behavior,
+    /// and structural fixes that maintain backward compatibility.
+    #[inline]
+    pub const fn minor(&self) -> u16 {
+        self.minor
+    }
+
+    /// Get the sub-minor version number.
+    ///
+    /// This represents minor fixes, performance improvements, and
+    /// other changes that should maintain both API and beharioral
+    /// compatibility.
+    #[inline]
+    pub const fn sub(&self) -> u16 {
+        self.sub
+    }
+}
+
+impl VersionRangeElemMajor {
+    /// Create a new `VersionRangeElemMajor` from the version components.
+    ///
+    /// # Parameters
+    ///
+    /// - `major`: The major version number.
+    #[inline]
+    pub const fn new(major: u16) -> Self {
+        VersionRangeElemMajor { major: major }
+    }
+
+    /// Get the major version number.
+    #[inline]
+    pub const fn major(&self) -> u16 {
+        self.major
+    }
+}
+
+impl VersionRangeElemMinor {
+    /// Create a new `VersionRangeElemMinor` from the version components.
+    ///
+    /// # Parameters
+    ///
+    /// - `major`: The major version number.
+    ///
+    /// - `minor`: The minor version number.
+    #[inline]
+    pub const fn new(
+        major: u16,
+        minor: u16
+    ) -> Self {
+        VersionRangeElemMinor {
+            major: major,
+            minor: minor
+        }
+    }
+
+    /// Get the major version number.
+    #[inline]
+    pub const fn major(&self) -> u16 {
+        self.major
+    }
+
+    /// Get the minor version number.
+    #[inline]
+    pub const fn minor(&self) -> u16 {
+        self.minor
+    }
+}
+
+impl VersionRangeElemSub {
+    /// Create a new `VersionRangeElemSub` from the version components.
+    ///
+    /// # Parameters
+    ///
+    /// - `major`: The major version number.
+    ///
+    /// - `minor`: The minor version number.
+    ///
+    /// - `sub`: The sub-minor version number.
+    #[inline]
+    pub const fn new(
+        major: u16,
+        minor: u16,
+        sub: u16
+    ) -> Self {
+        VersionRangeElemSub {
             major: major,
             minor: minor,
             sub: sub
@@ -158,99 +471,43 @@ impl Version {
     }
 }
 
-impl VersionRangeElemMajor {
-    /// Create a new `VersionRangeElemMajor` from the version components.
-    #[inline]
-    pub fn new(major: u16) -> Self {
-        VersionRangeElemMajor { major: major }
-    }
-
-    /// Get the major version number.
-    #[inline]
-    pub fn major(&self) -> u16 {
-        self.major
-    }
-}
-
-impl VersionRangeElemMinor {
-    /// Create a new `VersionRangeElemMinor` from the version components.
-    #[inline]
-    pub fn new(
-        major: u16,
-        minor: u16
-    ) -> Self {
-        VersionRangeElemMinor {
-            major: major,
-            minor: minor
-        }
-    }
-
-    /// Get the major version number.
-    #[inline]
-    pub fn major(&self) -> u16 {
-        self.major
-    }
-
-    /// Get the minor version number.
-    #[inline]
-    pub fn minor(&self) -> u16 {
-        self.minor
-    }
-}
-
-impl VersionRangeElemSub {
-    /// Create a new `VersionRangeElemSub` from the version components.
-    #[inline]
-    pub fn new(
-        major: u16,
-        minor: u16,
-        sub: u16
-    ) -> Self {
-        VersionRangeElemSub {
-            major: major,
-            minor: minor,
-            sub: sub
-        }
-    }
-
-    /// Get the major version number.
-    #[inline]
-    pub fn major(&self) -> u16 {
-        self.major
-    }
-
-    /// Get the minor version number.
-    #[inline]
-    pub fn minor(&self) -> u16 {
-        self.minor
-    }
-
-    /// Get the sub-minor version number.
-    #[inline]
-    pub fn sub(&self) -> u16 {
-        self.sub
-    }
-}
-
 impl VersionRangeElem {
     /// Create a new `VersionRangeElem` from a major version.
+    ///
+    /// # Parameters
+    ///
+    /// - `major`: The major version number.
     #[inline]
-    pub fn major(major: u16) -> Self {
+    pub const fn major(major: u16) -> Self {
         VersionRangeElem::Major(VersionRangeElemMajor::new(major))
     }
 
     /// Create a new `VersionRangeElem` from a minor version.
+    ///
+    /// # Parameters
+    ///
+    /// - `major`: The major version number.
+    ///
+    /// - `minor`: The minor version number.
     #[inline]
-    pub fn minor(
+    pub const fn minor(
         major: u16,
         minor: u16
     ) -> Self {
         VersionRangeElem::Minor(VersionRangeElemMinor::new(major, minor))
     }
 
-    /// Create a new `VersionRangeElem` from a subminor version.
+    /// Create a new `VersionRangeElem` from a sub-minor version.
+    ///
+    /// # Parameters
+    ///
+    /// - `major`: The major version number.
+    ///
+    /// - `minor`: The minor version number.
+    ///
+    /// - `sub`: The sub-minor version number.
     #[inline]
-    pub fn sub(
+    pub const fn sub(
         major: u16,
         minor: u16,
         sub: u16
@@ -260,7 +517,11 @@ impl VersionRangeElem {
 }
 
 impl VersionRange {
-    /// Check if this version range contains a specific version.
+    /// Check if this `VersionRange` contains a specific [`Version`].
+    ///
+    /// # Parameters
+    ///
+    /// - `version`: The `Version` to check.
     pub fn contains(
         &self,
         version: &Version
