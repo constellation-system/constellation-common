@@ -550,13 +550,13 @@ where
     /// Check if this `RetryResult` is a success.
     #[inline]
     pub fn is_success(&self) -> bool {
-        matches![self, RetryResult::Success(_)]
+        matches!(self, RetryResult::Success(_))
     }
 
     /// Check if this `RetryResult` is a retry.
     #[inline]
     pub fn is_retry(&self) -> bool {
-        matches![self, RetryResult::Retry(_)]
+        matches!(self, RetryResult::Retry(_))
     }
 
     /// Apply a mapping function to the success result.
@@ -731,19 +731,19 @@ where
     /// Check if this `RetryIndefResult` is a success.
     #[inline]
     pub fn is_success(&self) -> bool {
-        matches![self, RetryIndefResult::Success(_)]
+        matches!(self, RetryIndefResult::Success(_))
     }
 
     /// Check if this `RetryResult` is a retry.
     #[inline]
     pub fn is_retry(&self) -> bool {
-        matches![self, RetryIndefResult::Retry(_)]
+        matches!(self, RetryIndefResult::Retry(_))
     }
 
     /// Check if this `RetryResult` is an indefinite retry.
     #[inline]
     pub fn is_indef(&self) -> bool {
-        matches![self, RetryIndefResult::Indef(_)]
+        matches!(self, RetryIndefResult::Indef(_))
     }
 
     /// Apply a mapping function to the success result.
