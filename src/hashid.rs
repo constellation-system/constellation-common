@@ -1,4 +1,4 @@
-// Copyright © 2024-25 The Johns Hopkins Applied Physics Laboratory LLC.
+// Copyright © 2024-26 The Johns Hopkins Applied Physics Laboratory LLC.
 //
 // This program is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public License,
@@ -18,7 +18,7 @@
 
 //! Wrapper types for cryptographic hashes and IDs generated from them.
 use std::array::TryFromSliceError;
-use std::convert::TryFrom;
+use std::convert::Infallible;
 use std::convert::TryInto;
 use std::fmt::Display;
 use std::fmt::Error;
@@ -29,16 +29,15 @@ use std::iter::once;
 use blake2::Blake2b512;
 use digest::Digest;
 use ripemd::Ripemd160;
-use serde::Deserialize;
-use serde::Serialize;
-use serde::Serializer;
 use sha2::Sha384;
 use sha3::Sha3_512;
-use skein::consts::U64;
 use skein::Skein512;
+use skein::consts::U64;
 use whirlpool::Whirlpool;
 
-use crate::codec::Codec;
+use crate::codec::Encoder;
+use crate::config::CompoundHashAlgoConfig;
+use crate::config::Create;
 
 /// Trait for IDs generated from hashing a more complex type.
 pub trait HashID: Sized {
@@ -57,15 +56,34 @@ pub trait HashID: Sized {
 
 /// Trait for specific cryptographic hash algorithms.
 pub trait HashAlgo {
+    /// Type of [HashID]s produced by this `HashAlgo`.
     type HashID: HashID;
 
+    /// Get the length of a hash in bytes.
     fn hash_len(&self) -> usize;
 
+    /// Convert raw bytes representing a hash back into a
+    /// [HashID](HashAlgo::HashID).
+    ///
+    /// This does *not* hash the bytes.
+    ///
+    /// # Parameters
+    ///
+    /// - `bytes`: Raw bytes representing the hash value.
     fn wrap_hashed_bytes(
         &self,
         bytes: &[u8]
     ) -> Result<Self::HashID, TryFromSliceError>;
 
+    /// Compute the hash of a stream of bytes.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `I`: Type of iterators for byte arrays.
+    ///
+    /// # Parameters
+    ///
+    /// - `bytes`: Iterator producing one or more byte slices (`&[u8]`s).
     fn hash_bytes<'a, I>(
         &self,
         bytes: I
@@ -73,18 +91,32 @@ pub trait HashAlgo {
     where
         I: Iterator<Item = &'a [u8]>;
 
+    /// Get the hash of a zero-length bytestream.
     #[inline]
     fn null_hash(&self) -> Self::HashID {
         self.hash_bytes(empty())
     }
 
+    /// Compute the hash of an object's encoding.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `T`: The type being encoded.
+    ///
+    /// - `C`: The type of [Encoder] to use to encode `T`.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: The [Encoder] to use to produce the byte representation.
+    ///
+    /// - `val`: The value to encode.
     fn hashid<T, C>(
         &self,
         codec: &mut C,
         val: &T
     ) -> Result<Self::HashID, C::EncodeError>
     where
-        C: Codec<T> {
+        C: Encoder<T> {
         let encoded = codec.encode_to_vec(val)?;
 
         Ok(self.hash_bytes(once(&encoded[..])))
@@ -155,8 +187,6 @@ pub struct WhirlpoolID {
 /// function.
 ///
 /// This also can serve as a configuration object, and can be deserialized.
-#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[serde(try_from = "&'_ str")]
 pub enum CompoundHashAlgo {
     /// The Blake2b hash algorithm.
     Blake2b { blake2b: Blake2bAlgo },
@@ -188,6 +218,16 @@ pub enum CompoundHashID {
     Skein { skein: SkeinID },
     /// ID generated from the Whirlpool algorithm.
     Whirlpool { whirlpool: WhirlpoolID }
+}
+
+impl Create for RipeMD160Algo {
+    type Config = ();
+    type CreateError = Infallible;
+
+    #[inline]
+    fn create(_config: Self::Config) -> Result<Self, Self::CreateError> {
+        Ok(RipeMD160Algo)
+    }
 }
 
 impl HashAlgo for RipeMD160Algo {
@@ -260,6 +300,16 @@ impl Display for RipeMD160ID {
     }
 }
 
+impl Create for Blake2bAlgo {
+    type Config = ();
+    type CreateError = Infallible;
+
+    #[inline]
+    fn create(_config: Self::Config) -> Result<Self, Self::CreateError> {
+        Ok(Blake2bAlgo)
+    }
+}
+
 impl HashAlgo for Blake2bAlgo {
     type HashID = Blake2bID;
 
@@ -327,6 +377,16 @@ impl Display for Blake2bID {
         }
 
         Ok(())
+    }
+}
+
+impl Create for SHA3Algo {
+    type Config = ();
+    type CreateError = Infallible;
+
+    #[inline]
+    fn create(_config: Self::Config) -> Result<Self, Self::CreateError> {
+        Ok(SHA3Algo)
     }
 }
 
@@ -470,6 +530,16 @@ impl Display for SHA384ID {
     }
 }
 
+impl Create for SkeinAlgo {
+    type Config = ();
+    type CreateError = Infallible;
+
+    #[inline]
+    fn create(_config: Self::Config) -> Result<Self, Self::CreateError> {
+        Ok(SkeinAlgo)
+    }
+}
+
 impl HashAlgo for SkeinAlgo {
     type HashID = SkeinID;
 
@@ -537,6 +607,16 @@ impl Display for SkeinID {
         }
 
         Ok(())
+    }
+}
+
+impl Create for WhirlpoolAlgo {
+    type Config = ();
+    type CreateError = Infallible;
+
+    #[inline]
+    fn create(_config: Self::Config) -> Result<Self, Self::CreateError> {
+        Ok(WhirlpoolAlgo)
     }
 }
 
@@ -610,59 +690,33 @@ impl Display for WhirlpoolID {
     }
 }
 
-impl Default for CompoundHashAlgo {
-    #[inline]
-    fn default() -> Self {
-        CompoundHashAlgo::SHA3 { sha3: SHA3Algo }
-    }
-}
+impl Create for CompoundHashAlgo {
+    type Config = CompoundHashAlgoConfig;
+    type CreateError = Infallible;
 
-impl<'a> TryFrom<&'a str> for CompoundHashAlgo {
-    type Error = &'a str;
-
-    fn try_from(name: &'a str) -> Result<CompoundHashAlgo, &'a str> {
-        match name {
-            "Blake2b" => Ok(CompoundHashAlgo::Blake2b {
+    fn create(config: CompoundHashAlgoConfig) -> Result<Self, Infallible> {
+        match config {
+            CompoundHashAlgoConfig::Blake2b => Ok(CompoundHashAlgo::Blake2b {
                 blake2b: Blake2bAlgo
             }),
-            "RipeMD-160" => Ok(CompoundHashAlgo::RipeMD160 {
-                ripemd160: RipeMD160Algo
-            }),
-            "SHA3-512" => Ok(CompoundHashAlgo::SHA3 { sha3: SHA3Algo }),
-            "SHA384" => Ok(CompoundHashAlgo::SHA384 { sha384: SHA384Algo }),
-            "Skein" => Ok(CompoundHashAlgo::Skein { skein: SkeinAlgo }),
-            "Whirlpool" => Ok(CompoundHashAlgo::Whirlpool {
-                whirlpool: WhirlpoolAlgo
-            }),
-            err => Err(err)
-        }
-    }
-}
-
-impl Serialize for CompoundHashAlgo {
-    #[inline]
-    fn serialize<S>(
-        &self,
-        serializer: S
-    ) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer {
-        match self {
-            CompoundHashAlgo::Blake2b { .. } => {
-                serializer.serialize_str("Blake2b")
+            CompoundHashAlgoConfig::RipeMD160 => {
+                Ok(CompoundHashAlgo::RipeMD160 {
+                    ripemd160: RipeMD160Algo
+                })
             }
-            CompoundHashAlgo::RipeMD160 { .. } => {
-                serializer.serialize_str("RipeMD-160")
+            CompoundHashAlgoConfig::SHA3 => {
+                Ok(CompoundHashAlgo::SHA3 { sha3: SHA3Algo })
             }
-            CompoundHashAlgo::SHA3 { .. } => {
-                serializer.serialize_str("SHA3-512")
+            CompoundHashAlgoConfig::SHA384 => {
+                Ok(CompoundHashAlgo::SHA384 { sha384: SHA384Algo })
             }
-            CompoundHashAlgo::SHA384 { .. } => {
-                serializer.serialize_str("SHA384")
+            CompoundHashAlgoConfig::Skein => {
+                Ok(CompoundHashAlgo::Skein { skein: SkeinAlgo })
             }
-            CompoundHashAlgo::Skein { .. } => serializer.serialize_str("Skein"),
-            CompoundHashAlgo::Whirlpool { .. } => {
-                serializer.serialize_str("Whirlpool")
+            CompoundHashAlgoConfig::Whirlpool => {
+                Ok(CompoundHashAlgo::Whirlpool {
+                    whirlpool: WhirlpoolAlgo
+                })
             }
         }
     }

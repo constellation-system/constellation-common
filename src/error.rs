@@ -1,4 +1,4 @@
-// Copyright © 2024-25 The Johns Hopkins Applied Physics Laboratory LLC.
+// Copyright © 2024-26 The Johns Hopkins Applied Physics Laboratory LLC.
 //
 // This program is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public License,
@@ -19,14 +19,41 @@
 //! Common functionality for errors and error-handling.
 use std::cmp::Ordering;
 use std::convert::Infallible;
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::io::ErrorKind;
+use std::string::FromUtf8Error;
+use std::sync::mpsc::RecvError;
+use std::sync::mpsc::SendError;
 
 use asn1rs::io::per::err::Error;
 use log::error;
 #[cfg(feature = "openssl")]
 use openssl::ssl::HandshakeError;
+#[cfg(feature = "openssl")]
+use openssl::ssl::MidHandshakeSslStream;
+
+/// Type for errors that may or may not represent recoverable
+/// conditions.
+///
+/// A prime example of this is [std::io::Error], which includes a
+/// number of non-recoverable conditions, but also includes
+/// [Interrupted](ErrorKind::Interrupted) and
+/// [WouldBlock](ErrorKind::WouldBlock).
+///
+/// This trait represents the splitting portion of this process.
+pub trait RecoverableError: Sized {
+    /// Type of permanent errors.
+    ///
+    /// These represent conditions that cannot be recovered from.
+    type Permanent: Display + ScopedError;
+    /// Type of errors that can be retried.
+    type Completable;
+
+    /// Project this into a completable and permanent portion.
+    fn split(self) -> (Option<Self::Completable>, Option<Self::Permanent>);
+}
 
 /// Errors that have a known scope.
 ///
@@ -138,23 +165,52 @@ pub enum ErrorScope {
     /// The error is temporary in nature, and the operation can be retried.
     ///
     /// This is associated with errors such as
-    /// [WouldBlock](ErrorKind::WouldBlock),
     /// [TimedOut](ErrorKind::TimedOut), and
     /// [Interrupted](ErrorKind::Interrupted).  These should generally
     /// not be reported, except as debug messages.
-    Retryable
+    Retryable,
+    /// The error denotes end of input in a nonblocking I/O setting.
+    ///
+    /// This is associated with [WouldBlock](ErrorKind::WouldBlock).
+    /// This should generally not be reported.
+    WouldBlock
 }
 
+#[derive(Debug)]
+pub struct CompletableIOError;
+
+/// Common type used to indicate mutex poisoning.
 #[derive(Debug)]
 pub struct MutexPoison;
 
+/// Common type used to indicate mutex poisoning in addition to
+/// another error type.
+///
+/// This is often used for shared wrappers around inner
+/// implementations with their own associated error types.
+///
+/// # Type Parameters
+///
+/// * `Error`: Type of inner errors.
 #[derive(Debug)]
 pub enum WithMutexPoison<Error> {
-    Inner { error: Error },
+    /// The inner error type occurred.
+    Inner {
+        /// The inner error that occurred.
+        err: Error
+    },
+    /// Mutex was poisoned.
     MutexPoison
 }
 
-/// Errors that can occur when sending a message.
+/// Errors that can occur when sending/receiving while using a codec.
+///
+/// # Type Parameters
+///
+/// - `Codec`: Type of codec-level errors.
+///
+/// - `IO`: Type of errors that occur while sending/receiving.
+#[derive(Debug)]
 pub enum CodecStreamError<Codec, IO> {
     /// Error occurred when encoding or decoding the message.
     Codec {
@@ -204,6 +260,8 @@ impl Ord for ErrorScope {
             (ErrorScope::External, ErrorScope::External) => Ordering::Equal,
             (ErrorScope::External, _) => Ordering::Greater,
             (_, ErrorScope::External) => Ordering::Less,
+            (ErrorScope::WouldBlock, _) => Ordering::Greater,
+            (_, ErrorScope::WouldBlock) => Ordering::Less,
             (ErrorScope::Retryable, ErrorScope::Retryable) => Ordering::Equal
         }
     }
@@ -216,6 +274,98 @@ impl PartialOrd for ErrorScope {
         other: &Self
     ) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+impl<Inner> RecoverableError for WithMutexPoison<Inner>
+where
+    Inner: RecoverableError
+{
+    type Completable = Inner::Completable;
+    type Permanent = WithMutexPoison<Inner::Permanent>;
+
+    fn split(self) -> (Option<Self::Completable>, Option<Self::Permanent>) {
+        match self {
+            WithMutexPoison::Inner { err } => {
+                let (completable, permanent) = err.split();
+                let permanent =
+                    permanent.map(|err| WithMutexPoison::Inner { err: err });
+
+                (completable, permanent)
+            }
+            WithMutexPoison::MutexPoison => {
+                (None, Some(WithMutexPoison::MutexPoison))
+            }
+        }
+    }
+}
+
+impl<Encode, Write> RecoverableError for CodecStreamError<Encode, Write>
+where
+    Encode: Debug + Display,
+    Write: RecoverableError
+{
+    type Completable = CodecStreamError<Infallible, Write::Completable>;
+    type Permanent = CodecStreamError<Encode, Write::Permanent>;
+
+    #[inline]
+    fn split(self) -> (Option<Self::Completable>, Option<Self::Permanent>) {
+        match self {
+            CodecStreamError::Codec { err } => {
+                (None, Some(CodecStreamError::Codec { err }))
+            }
+            CodecStreamError::IO { err } => {
+                let (completable, permanent) = err.split();
+
+                (
+                    completable.map(|res| CodecStreamError::IO { err: res }),
+                    permanent.map(|res| CodecStreamError::IO { err: res })
+                )
+            }
+        }
+    }
+}
+
+impl RecoverableError for Infallible {
+    type Completable = Infallible;
+    type Permanent = Infallible;
+
+    #[inline]
+    fn split(self) -> (Option<Self::Completable>, Option<Self::Permanent>) {
+        (None, Some(self))
+    }
+}
+
+impl RecoverableError for std::io::Error {
+    type Completable = CompletableIOError;
+    type Permanent = std::io::Error;
+
+    #[inline]
+    fn split(self) -> (Option<Self::Completable>, Option<Self::Permanent>) {
+        match self.kind() {
+            ErrorKind::WouldBlock | ErrorKind::Interrupted => {
+                (Some(CompletableIOError), None)
+            }
+            _ => (None, Some(self))
+        }
+    }
+}
+
+#[cfg(feature = "openssl")]
+impl<S> RecoverableError for HandshakeError<S> {
+    type Completable = MidHandshakeSslStream<S>;
+    type Permanent = openssl::ssl::Error;
+
+    fn split(self) -> (Option<Self::Completable>, Option<Self::Permanent>) {
+        match self {
+            HandshakeError::SetupFailure(stack) => {
+                (None, Some(openssl::ssl::Error::from(stack)))
+            }
+            HandshakeError::Failure(stream) => {
+                (None, Some(stream.into_error()))
+            }
+            HandshakeError::WouldBlock(stream) => (Some(stream), None)
+        }
     }
 }
 
@@ -240,9 +390,10 @@ impl ScopedError for std::io::Error {
             ErrorKind::ConnectionRefused | ErrorKind::ConnectionAborted => {
                 ErrorScope::External
             }
-            ErrorKind::Interrupted |
-            ErrorKind::WouldBlock |
-            ErrorKind::TimedOut => ErrorScope::Retryable,
+            ErrorKind::Interrupted | ErrorKind::TimedOut => {
+                ErrorScope::Retryable
+            }
+            ErrorKind::WouldBlock => ErrorScope::WouldBlock,
             _ => ErrorScope::Unrecoverable
         }
     }
@@ -259,6 +410,29 @@ impl ScopedError for Infallible {
 }
 
 impl ScopedError for Error {
+    #[inline]
+    fn scope(&self) -> ErrorScope {
+        // XXX This needs to be expanded out
+        ErrorScope::Msg
+    }
+}
+
+impl ScopedError for CompletableIOError {
+    #[inline]
+    fn scope(&self) -> ErrorScope {
+        ErrorScope::WouldBlock
+    }
+}
+
+#[cfg(feature = "openssl")]
+impl ScopedError for openssl::ssl::Error {
+    fn scope(&self) -> ErrorScope {
+        // XXX Actually do this properly
+        ErrorScope::External
+    }
+}
+
+impl ScopedError for FromUtf8Error {
     #[inline]
     fn scope(&self) -> ErrorScope {
         ErrorScope::Msg
@@ -292,9 +466,23 @@ where
     #[inline]
     fn scope(&self) -> ErrorScope {
         match self {
-            WithMutexPoison::Inner { error } => error.scope(),
+            WithMutexPoison::Inner { err } => err.scope(),
             WithMutexPoison::MutexPoison => ErrorScope::Unrecoverable
         }
+    }
+}
+
+impl<T> ScopedError for SendError<T> {
+    #[inline]
+    fn scope(&self) -> ErrorScope {
+        ErrorScope::Shutdown
+    }
+}
+
+impl ScopedError for RecvError {
+    #[inline]
+    fn scope(&self) -> ErrorScope {
+        ErrorScope::Shutdown
     }
 }
 
@@ -304,8 +492,36 @@ impl<S> ScopedError for HandshakeError<S> {
         match self {
             HandshakeError::SetupFailure(_) => ErrorScope::System,
             HandshakeError::Failure(_) => ErrorScope::External,
-            HandshakeError::WouldBlock(_) => ErrorScope::Retryable
+            HandshakeError::WouldBlock(_) => ErrorScope::WouldBlock
         }
+    }
+}
+
+impl Display for ErrorScope {
+    fn fmt(
+        &self,
+        f: &mut Formatter<'_>
+    ) -> Result<(), std::fmt::Error> {
+        match self {
+            ErrorScope::Retryable => write!(f, "retryable"),
+            ErrorScope::WouldBlock => write!(f, "would block"),
+            ErrorScope::Msg => write!(f, "message"),
+            ErrorScope::Batch => write!(f, "batch"),
+            ErrorScope::Session => write!(f, "session"),
+            ErrorScope::External => write!(f, "external"),
+            ErrorScope::System => write!(f, "system"),
+            ErrorScope::Shutdown => write!(f, "shutdown"),
+            ErrorScope::Unrecoverable => write!(f, "unrecoverable")
+        }
+    }
+}
+
+impl Display for CompletableIOError {
+    fn fmt(
+        &self,
+        f: &mut Formatter<'_>
+    ) -> Result<(), std::fmt::Error> {
+        write!(f, "completable IO error")
     }
 }
 
@@ -327,7 +543,7 @@ where
         f: &mut Formatter<'_>
     ) -> Result<(), std::fmt::Error> {
         match self {
-            WithMutexPoison::Inner { error } => error.fmt(f),
+            WithMutexPoison::Inner { err } => err.fmt(f),
             WithMutexPoison::MutexPoison => write!(f, "mutex poisoned")
         }
     }

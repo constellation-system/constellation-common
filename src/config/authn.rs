@@ -1,4 +1,4 @@
-// Copyright © 2024-25 The Johns Hopkins Applied Physics Laboratory LLC.
+// Copyright © 2024-26 The Johns Hopkins Applied Physics Laboratory LLC.
 //
 // This program is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public License,
@@ -203,7 +203,7 @@ impl ClientGSSAPIConfig {
     ///         None,
     ///         GSSAPISecurity::Optional { seclvl: 128 }
     ///     ),
-    ///     serde_yaml::from_str(yaml).unwrap()
+    ///     yaml_serde::from_str(yaml).unwrap()
     /// );
     /// ```
     #[inline]
@@ -219,6 +219,38 @@ impl ClientGSSAPIConfig {
             time_req: time_req,
             security: security
         }
+    }
+
+    /// Get the client principal name, if one is specified.
+    #[inline]
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// Get the expected service principal name, if one is specified.
+    #[inline]
+    pub fn service(&self) -> Option<&str> {
+        self.service.as_deref()
+    }
+
+    #[inline]
+    pub fn set_service(
+        &mut self,
+        service: String
+    ) {
+        self.service = Some(service)
+    }
+
+    /// The time for which to request credentials.
+    #[inline]
+    pub fn time_req(&self) -> Option<Duration> {
+        self.time_req
+    }
+
+    /// Get the security level.
+    #[inline]
+    pub fn security(&self) -> &GSSAPISecurity {
+        &self.security
     }
 
     /// Decompose this `ClientGSSAPIConfig` into its components.
@@ -243,30 +275,6 @@ impl ClientGSSAPIConfig {
     ) {
         (self.name, self.service, self.time_req, self.security)
     }
-
-    /// Get the client principal name, if one is specified.
-    #[inline]
-    pub fn name(&self) -> Option<&str> {
-        self.name.as_deref()
-    }
-
-    /// Get the expected service principal name, if one is specified.
-    #[inline]
-    pub fn service(&self) -> Option<&str> {
-        self.service.as_deref()
-    }
-
-    /// The time for which to request credentials.
-    #[inline]
-    pub fn time_req(&self) -> Option<Duration> {
-        self.time_req
-    }
-
-    /// Get the security level.
-    #[inline]
-    pub fn security(&self) -> &GSSAPISecurity {
-        &self.security
-    }
 }
 
 impl GSSAPISecurity {
@@ -285,7 +293,7 @@ impl GSSAPISecurity {
     ///
     /// assert_eq!(
     ///     GSSAPISecurity::optional(128),
-    ///     serde_yaml::from_str(yaml).unwrap()
+    ///     yaml_serde::from_str(yaml).unwrap()
     /// );
     /// ```
     #[inline]
@@ -310,7 +318,7 @@ impl GSSAPISecurity {
     ///
     /// assert_eq!(
     ///     GSSAPISecurity::required(56),
-    ///     serde_yaml::from_str(yaml).unwrap()
+    ///     yaml_serde::from_str(yaml).unwrap()
     /// );
     /// ```
     #[inline]
@@ -360,7 +368,7 @@ impl ServerGSSAPIConfig {
     ///         Some(String::from("test")),
     ///         None,
     ///     ),
-    ///     serde_yaml::from_str(yaml).unwrap()
+    ///     yaml_serde::from_str(yaml).unwrap()
     /// );
     /// ```
     #[inline]
@@ -417,7 +425,7 @@ impl Default for GSSAPISecurity {
 // security: GSSAPISecurity::default()
 // }
 // };
-// let actual = serde_yaml::from_str(yaml).unwrap();
+// let actual = yaml_serde::from_str(yaml).unwrap();
 //
 // assert_eq!(expected, actual)
 // }
@@ -429,7 +437,7 @@ fn test_deserialize_server_gssapi_name() {
         name: Some(String::from("cred")),
         time_req: None
     };
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }

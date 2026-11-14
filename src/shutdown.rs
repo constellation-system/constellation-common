@@ -1,4 +1,4 @@
-// Copyright © 2024-25 The Johns Hopkins Applied Physics Laboratory LLC.
+// Copyright © 2024-26 The Johns Hopkins Applied Physics Laboratory LLC.
 //
 // This program is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public License,
@@ -17,13 +17,20 @@
 // <https://www.gnu.org/licenses/>.
 
 //! Shutdown flags for multithreaded operation.
+use std::io::Error;
+use std::sync::Arc;
+use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
+
+use crate::error::MutexPoison;
+use crate::error::WithMutexPoison;
+use crate::sync::Notify;
 
 /// Shutdown flag that can be triggered manually, or by a signal.
 #[derive(Clone)]
 pub struct ShutdownFlag {
+    notifies: Arc<RwLock<Vec<Notify>>>,
     /// Atomic boolean flag.
     flag: Arc<AtomicBool>
 }
@@ -31,7 +38,10 @@ pub struct ShutdownFlag {
 impl Default for ShutdownFlag {
     #[inline]
     fn default() -> Self {
-        Self::new()
+        ShutdownFlag {
+            flag: Arc::new(AtomicBool::new(false)),
+            notifies: Arc::new(RwLock::new(Vec::new()))
+        }
     }
 }
 
@@ -39,8 +49,15 @@ impl ShutdownFlag {
     /// Create a new shutdown flag.
     #[inline]
     pub fn new() -> ShutdownFlag {
+        Self::default()
+    }
+
+    /// Create a new shutdown flag.
+    #[inline]
+    pub fn with_capacity(size: usize) -> ShutdownFlag {
         ShutdownFlag {
-            flag: Arc::new(AtomicBool::new(false))
+            flag: Arc::new(AtomicBool::new(false)),
+            notifies: Arc::new(RwLock::new(Vec::with_capacity(size)))
         }
     }
 
@@ -56,19 +73,31 @@ impl ShutdownFlag {
         self.flag.load(Ordering::Acquire)
     }
 
+    /// Register a new [Waker].
+    #[inline]
+    pub fn add_notify(
+        &mut self,
+        notify: Notify
+    ) -> Result<(), MutexPoison> {
+        self.notifies.write().map_err(|_| MutexPoison)?.push(notify);
+
+        Ok(())
+    }
+
     /// Set the shutdown status on this flag.
     ///
     /// Once set, it cannot be unset.
     #[inline]
-    pub fn set(&mut self) {
+    pub fn set(&mut self) -> Result<(), WithMutexPoison<Error>> {
         self.flag.store(true, Ordering::Release);
-    }
-
-    /// Get the underlying `Arc<AtomicBool>`.
-    ///
-    /// This should only be used for purposes like registering a
-    /// signal flag.
-    pub fn underlying(&self) -> Arc<AtomicBool> {
-        self.flag.clone()
+        self.notifies
+            .read()
+            .map_err(|_| WithMutexPoison::MutexPoison)?
+            .iter()
+            .try_for_each(|waker| {
+                waker
+                    .notify()
+                    .map_err(|err| WithMutexPoison::Inner { err: err })
+            })
     }
 }

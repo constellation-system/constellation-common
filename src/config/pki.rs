@@ -1,4 +1,4 @@
-// Copyright © 2024-25 The Johns Hopkins Applied Physics Laboratory LLC.
+// Copyright © 2024-26 The Johns Hopkins Applied Physics Laboratory LLC.
 //
 // This program is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public License,
@@ -40,6 +40,8 @@ use openssl::error::ErrorStack;
 #[cfg(feature = "openssl")]
 use openssl::ssl::SslFiletype;
 #[cfg(feature = "openssl")]
+use openssl::x509::X509PurposeId;
+#[cfg(feature = "openssl")]
 use openssl::x509::store::X509Lookup;
 #[cfg(feature = "openssl")]
 use openssl::x509::store::X509Store;
@@ -51,8 +53,6 @@ use openssl::x509::verify::X509CheckFlags;
 use openssl::x509::verify::X509VerifyFlags;
 #[cfg(feature = "openssl")]
 use openssl::x509::verify::X509VerifyParam;
-#[cfg(feature = "openssl")]
-use openssl::x509::X509PurposeId;
 use serde::Deserialize;
 use serde::Serialize;
 #[cfg(feature = "openssl")]
@@ -351,7 +351,7 @@ impl PKITrustRoot {
     ///         #[cfg(feature = "openssl")]
     ///         Some(16)
     ///     ),
-    ///     serde_yaml::from_str(yaml).unwrap()
+    ///     yaml_serde::from_str(yaml).unwrap()
     /// );
     /// ```
     #[inline]
@@ -718,7 +718,7 @@ impl PKITrustRoot {
     /// #
     /// let yaml = concat!(
     ///     "root-certs:\n",
-    ///     "  - test/data/certs/server/ca_cert.pem\n",
+    ///     "  - tests/data/certs/server/ca_cert.pem\n",
     ///     "crls: []\n",
     ///     "verify-flags:\n",
     ///     "  - EXPLICIT_POLICY\n",
@@ -729,7 +729,7 @@ impl PKITrustRoot {
     ///     "auth-level: 4\n",
     ///     "verify-depth: 16\n"
     /// );
-    /// let conf: PKITrustRoot = serde_yaml::from_str(yaml).unwrap();
+    /// let conf: PKITrustRoot = yaml_serde::from_str(yaml).unwrap();
     ///
     /// conf.load(None, Some(&IPEndpointAddr::name(String::from("test"))),
     ///           X509PurposeId::SSL_CLIENT)
@@ -1043,7 +1043,7 @@ fn test_deserialize_cfg_dir() {
         verify_depth: None
     };
 
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
@@ -1072,7 +1072,7 @@ fn test_deserialize_cfg_dir_certs() {
         verify_depth: None
     };
 
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
@@ -1101,7 +1101,7 @@ fn test_deserialize_cfg_dir_crls() {
         verify_depth: None
     };
 
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
@@ -1129,7 +1129,7 @@ fn test_deserialize_cfg_certs_dir_empty_crls() {
         verify_depth: None
     };
 
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
@@ -1156,7 +1156,7 @@ fn test_deserialize_cfg_dir_certs_auth_level() {
         verify_depth: None
     };
 
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
@@ -1188,7 +1188,7 @@ fn test_deserialize_cfg_dir_certs_verify_flags() {
         verify_depth: None
     };
 
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
@@ -1200,10 +1200,10 @@ fn test_load_trust_root_single_no_crl() {
 
     let yaml = concat!(
         "root-certs:\n",
-        "  - test/data/certs/client/ca_cert.pem\n",
+        "  - tests/data/certs/client/ca_cert.pem\n",
         "crls: []\n"
     );
-    let root: PKITrustRoot = serde_yaml::from_str(yaml).unwrap();
+    let root: PKITrustRoot = yaml_serde::from_str(yaml).unwrap();
     let name = String::from("test-client.nowhere.com");
     let endpoint = IPEndpointAddr::name(name);
 
@@ -1217,11 +1217,11 @@ fn test_load_trust_root_two_no_crl() {
 
     let yaml = concat!(
         "root-certs:\n",
-        "  - test/data/certs/client/ca_cert.pem\n",
-        "  - test/data/certs/server/ca_cert.pem\n",
+        "  - tests/data/certs/client/ca_cert.pem\n",
+        "  - tests/data/certs/server/ca_cert.pem\n",
         "crls: []\n"
     );
-    let root: PKITrustRoot = serde_yaml::from_str(yaml).unwrap();
+    let root: PKITrustRoot = yaml_serde::from_str(yaml).unwrap();
     let name = String::from("test-client.nowhere.com");
     let endpoint = IPEndpointAddr::name(name);
 
@@ -1234,8 +1234,8 @@ fn test_load_trust_root_dir_no_crl() {
     init();
 
     let yaml =
-        concat!("dirs:\n", "  - test/data/certs/client/\n", "crls: []\n");
-    let root: PKITrustRoot = serde_yaml::from_str(yaml).unwrap();
+        concat!("dirs:\n", "  - tests/data/certs/client/\n", "crls: []\n");
+    let root: PKITrustRoot = yaml_serde::from_str(yaml).unwrap();
     let name = String::from("test-client.nowhere.com");
     let endpoint = IPEndpointAddr::name(name);
 
@@ -1249,12 +1249,12 @@ fn test_load_trust_root_dir_certs_auth_level() {
 
     let yaml = concat!(
         "root-certs:\n",
-        "  - test/data/certs/server/ca_cert.pem\n",
+        "  - tests/data/certs/server/ca_cert.pem\n",
         "dirs:\n",
-        "  - test/data/certs/client/\n",
+        "  - tests/data/certs/client/\n",
         "auth-level: 3\n"
     );
-    let root: PKITrustRoot = serde_yaml::from_str(yaml).unwrap();
+    let root: PKITrustRoot = yaml_serde::from_str(yaml).unwrap();
     let name = String::from("test-server.nowhere.com");
     let endpoint = IPEndpointAddr::name(name);
 
@@ -1268,14 +1268,14 @@ fn test_load_trust_root_dir_certs_verify_flags() {
 
     let yaml = concat!(
         "root-certs:\n",
-        "  - test/data/certs/server/ca_cert.pem\n",
+        "  - tests/data/certs/server/ca_cert.pem\n",
         "dirs:\n",
-        "  - test/data/certs/client/\n",
+        "  - tests/data/certs/client/\n",
         "verify-flags:\n",
         "  - CRL_CHECK_ALL\n",
         "  - EXPLICIT_POLICY\n"
     );
-    let root: PKITrustRoot = serde_yaml::from_str(yaml).unwrap();
+    let root: PKITrustRoot = yaml_serde::from_str(yaml).unwrap();
     let name = String::from("test-server.nowhere.com");
     let endpoint = IPEndpointAddr::name(name);
 

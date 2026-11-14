@@ -1,4 +1,4 @@
-// Copyright © 2024-25 The Johns Hopkins Applied Physics Laboratory LLC.
+// Copyright © 2024-26 The Johns Hopkins Applied Physics Laboratory LLC.
 //
 // This program is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public License,
@@ -16,13 +16,20 @@
 // License along with this program.  If not, see
 // <https://www.gnu.org/licenses/>.
 
-//! Common traits for network communications.
+//! Common functionality for network communications.
+use std::cell::RefCell;
+use std::collections::HashSet;
 use std::convert::Infallible;
+use std::convert::TryFrom;
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::hash::Hash;
 use std::io::Error;
 use std::io::IoSlice;
 use std::io::IoSliceMut;
+use std::io::Read;
+use std::io::Write;
 use std::marker::PhantomData;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
@@ -30,40 +37,123 @@ use std::net::Ipv6Addr;
 use std::net::SocketAddr;
 use std::net::SocketAddrV4;
 use std::net::SocketAddrV6;
+use std::ops::Deref;
+use std::rc::Rc;
 use std::str::FromStr;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Instant;
 
+use mio::net::TcpStream;
+use mio::net::UnixStream;
 use serde::Deserialize;
 use serde::Serialize;
-use serde::Serializer;
 
+use crate::config::CreateWithParam;
 use crate::error::ScopedError;
+use crate::error::WithMutexPoison;
+use crate::unix::UnixSocketAddr;
+
+pub mod test;
+
+/// Trait for sessions with an individual peer address.
+///
+/// Implementors of this trait are also expected to implement [Read]
+/// and [Write].
+pub trait Session {
+    /// The type of local addresses.
+    type LocalAddr: Display;
+    /// The type of peer (remote) addresses.
+    type PeerAddr: Display;
+
+    /// Get the local address for this flow.
+    fn local_addr(&self) -> Result<Self::LocalAddr, Error>;
+
+    /// Get the peer (remote) address for this flow.
+    fn peer_addr(&self) -> Result<Self::PeerAddr, Error>;
+}
+
+/// Trait for protocol state machines.
+///
+/// # Type Parameters
+///
+/// - `Outcome`: The type of negotiation outcomes.
+pub trait Negotiator<Outcome> {
+    /// Type of negotiation state machine states.
+    type State;
+    /// Type of results for pending negotiations.
+    type Pending;
+    /// Errors that can occur during negotiations.
+    type NegotiateError: Debug + Display;
+
+    /// Perform negotiations.
+    ///
+    /// # Parameters
+    ///
+    /// - `state`: The negotiation state machine state.
+    fn negotiate(
+        &self,
+        state: Self::State
+    ) -> Result<NegotiatorResult<Outcome, Self::Pending>, Self::NegotiateError>;
+
+    /// Complete a failed negotiation.
+    ///
+    /// # Parameters
+    ///
+    /// - `pending`: The negotiation state machine state.
+    fn complete_negotiate(
+        &self,
+        pending: Self::Pending
+    ) -> Result<NegotiatorResult<Outcome, Self::Pending>, Self::NegotiateError>;
+}
+
+pub trait NegotiatorStart<Outcome, Stream>: Negotiator<Outcome> {
+    type Param;
+    type StartError: Debug + Display + ScopedError;
+
+    fn start(
+        &self,
+        param: &Self::Param,
+        stream: Stream
+    ) -> Result<Self::State, Self::StartError>;
+}
 
 /// Trait for sources of messages to be sent over a private channel.
 pub trait PrivateMsgs<Msg> {
     /// Type of errors that can occur when collecting messages.
-    type MsgsError: Display + ScopedError;
+    type MsgsError: Debug + Display + ScopedError;
 
     /// Collect and report outbound messages.
     ///
     /// This will provide the outbound messages, if there are any, as
     /// well as the time at which to check again for new messages.
+    ///
+    /// # Parameters
+    ///
+    /// - `now`: The current time; can be obtained using [now](Instant::now).
     fn msgs(
-        &mut self
+        &mut self,
+        now: Instant
     ) -> Result<(Option<Vec<Msg>>, Option<Instant>), Self::MsgsError>;
 }
 
 /// Trait for sources of messages to be sent over a shared channel.
 pub trait SharedMsgs<Party, Msg> {
     /// Type of errors that can occur when collecting messages.
-    type MsgsError: Display + ScopedError;
+    type MsgsError: Debug + Display + ScopedError;
 
     /// Collect and report outbound messages.
     ///
     /// This will provide the outbound messages, if there are any, as
     /// well as the time at which to check again for new messages.
+    ///
+    /// # Parameters
+    ///
+    /// - `now`: The current time; can be obtained using [now](Instant::now).
     fn msgs(
-        &mut self
+        &mut self,
+        live: &HashSet<Party>,
+        now: Instant
     ) -> Result<
         (Option<Vec<(Vec<Party>, Vec<Msg>)>>, Option<Instant>),
         Self::MsgsError
@@ -76,7 +166,7 @@ pub trait SharedMsgs<Party, Msg> {
 /// like low-level sockets, which will typically be thin wrappers
 /// around Unix datagram or UDP sockets.
 pub trait Socket: Send + Sync {
-    type Addr: Clone + Display + Eq;
+    type Addr: Clone + Debug + Display + Eq;
 
     /// Get the local socket address.
     ///
@@ -115,10 +205,16 @@ pub trait Sender: Socket {
     /// This returns the number of bytes sent, which should be equal
     /// to `buf.len()` unless the maximum size is exceeded, or an
     /// error if one occurs.
+    ///
+    /// # Parameters
+    ///
+    /// - `addr`: Address to which to send.
+    ///
+    /// - `data`: The message data to send.
     fn send_to(
         &self,
         addr: &Self::Addr,
-        buf: &[u8]
+        data: &[u8]
     ) -> Result<usize, Error>;
 
     /// Send the data in `buf` to the counterparty at `Addr`, using
@@ -127,6 +223,12 @@ pub trait Sender: Socket {
     /// This returns the number of bytes sent, which should be equal
     /// to `buf.len()` unless the maximum size is exceeded, or an
     /// error if one occurs.
+    ///
+    /// # Parameters
+    ///
+    /// - `addr`: Address to which to send.
+    ///
+    /// - `bufs`: The message data to send.
     fn send_to_vectored(
         &self,
         addr: &Self::Addr,
@@ -155,6 +257,10 @@ pub trait Receiver: Socket {
     /// cannot establish identity, unless the underlying socket
     /// implementation guarantees it.  See
     /// [allow_session_addr_creds](Socket::allow_session_addr_creds).
+    ///
+    /// # Parameters
+    ///
+    /// - `buf`: The buffer into which to write the message.
     fn recv_from(
         &self,
         buf: &mut [u8]
@@ -171,28 +277,14 @@ pub trait Receiver: Socket {
     /// cannot establish identity, unless the underlying socket
     /// implementation guarantees it.  See
     /// [allow_session_addr_creds](Socket::allow_session_addr_creds).
+    ///
+    /// # Parameters
+    ///
+    /// - `bufs`: The buffers into which to write the message.
     fn recv_from_vectored(
         &self,
         bufs: &mut [IoSliceMut<'_>]
     ) -> Result<(usize, Self::Addr, Option<Self::MsgCred>), Error>;
-
-    /// Examine a pending message without consuming it.
-    ///
-    /// This reads the next pending message into `buf`, returning the
-    /// number of bytes received and the address of the counterparty
-    /// that sent the message.
-    ///
-    /// If the size of the message exceeds the space available in
-    /// `buf`, the remaining bytes will be dropped.
-    ///
-    /// The counterparty address is generally able to be spoofed and
-    /// cannot establish identity, unless the underlying socket
-    /// implementation guarantees it.  See
-    /// [allow_session_addr_creds](Socket::allow_session_addr_creds).
-    fn peek_from(
-        &self,
-        buf: &mut [u8]
-    ) -> Result<(usize, Self::Addr), Error>;
 }
 
 /// Transformations based on a mutable context that can be done on messages.
@@ -206,14 +298,19 @@ pub trait Receiver: Socket {
 /// encapsulation protocol.
 pub trait DatagramXfrm {
     /// Errors that can occur wrapping or unwrapping mesages.
-    type Error: Display;
+    type Error: Debug + Display;
     /// Errors that can occur getting the header size;
-    type SizeError: Display;
-    /// Type of peer addresses.
-    type PeerAddr: Clone + Display + Eq + Send;
-    type LocalAddr: Clone + Display + Eq + Send;
+    type SizeError: Debug + Display;
+    /// Type of counterparty addresses.
+    type PeerAddr: Clone + Debug + Display + Hash + Eq + Send;
+    /// Type of the local address.
+    type LocalAddr: Clone + Debug + Display + Hash + Eq + Send;
 
     /// Get the header size for sending a message to `addr`.
+    ///
+    /// # Parameters
+    ///
+    /// - `addr`: The counterparty address.
     fn header_size(
         &self,
         addr: &Self::PeerAddr
@@ -252,7 +349,7 @@ pub trait DatagramXfrm {
     ///
     /// This will wrap the message in `buf`, returning `None` if no
     /// change is made to the message, and `Some` if a new message has
-    /// been generated.  In either case, the
+    /// been generated.
     fn wrap(
         &mut self,
         msg: &[u8],
@@ -260,6 +357,12 @@ pub trait DatagramXfrm {
     ) -> Result<(Option<Vec<u8>>, Self::LocalAddr), Self::Error>;
 
     /// Unwrap the message in `buf` in-place.
+    ///
+    /// # Parameters
+    ///
+    /// - `buf`: Buffer containing the encoded message.
+    ///
+    /// - `addr`: The address from which this was receieved.
     fn unwrap(
         &mut self,
         buf: &mut [u8],
@@ -289,7 +392,7 @@ pub trait DatagramXfrmCreateParam: DatagramXfrm {
     /// Type of parameters that are obtained.
     type Param;
     /// Errors that can occur recovering parameters.
-    type ParamError: Display + ScopedError;
+    type ParamError: Debug + Display + ScopedError;
 
     /// Recover the [DatagramXfrm] creation parameters from this
     /// instance together with a socket.
@@ -297,6 +400,14 @@ pub trait DatagramXfrmCreateParam: DatagramXfrm {
         &self,
         socket: &Self::Socket
     ) -> Result<Self::Param, Self::ParamError>;
+}
+
+/// Result from a [Negotiator].
+pub enum NegotiatorResult<Complete, Pending> {
+    /// Negotiations are complete.
+    Complete(Complete),
+    /// Negotiations are still pending.
+    Pending(Pending)
 }
 
 /// This is a [DatagramXfrm] that does no transformation on the
@@ -317,9 +428,12 @@ pub struct PassthruDatagramXfrm<Addr>(PhantomData<Addr>);
 /// address, then the result will be converted to an [IpAddr] and
 /// interpreted as such.  Otherwise, the result will be interpreted as
 /// a name, which will ultimately be resolved.
-#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
+)]
 #[serde(untagged)]
 #[serde(from = "String")]
+#[serde(into = "String")]
 pub enum IPEndpointAddr {
     /// A fixed IP address.
     ///
@@ -344,23 +458,21 @@ pub enum IPEndpointAddr {
 ///
 /// # YAML Format
 ///
-/// The YAML format has two fields, both of which are mandatory:
-///
-/// - `addr`: An [IPEndpointAddr], represented as a string.
-/// - `port`: A number, representing the port number.
+/// The YAML format is a string in a standard URL-type format.
 ///
 /// ## Examples
 ///
 /// The following is an example YAML coniguration:
 /// ```yaml
-/// addr: en.wikipedia.org
-/// port: 443
+/// en.wikipedia.org:443
 /// ```
 #[derive(
     Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize,
 )]
 #[serde(rename = "ip")]
 #[serde(rename_all = "kebab-case")]
+#[serde(try_from = "String")]
+#[serde(into = "String")]
 pub struct IPEndpoint {
     /// IP endpoint to which to connect.
     addr: IPEndpointAddr,
@@ -371,13 +483,225 @@ pub struct IPEndpoint {
 /// Creation parameter for [PassthruDatagramXfrm].
 ///
 /// This contains no information.
-#[derive(Clone, Eq, Debug, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone,
+    Eq,
+    Default,
+    Debug,
+    Deserialize,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+)]
 pub struct PassthruDatagramXfrmParam;
 
-impl Default for PassthruDatagramXfrmParam {
+#[derive(Clone, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct PassthruNegotiator;
+
+pub struct TrivialNegotiator;
+
+pub struct PassthruSessionNegotiation<Outcome> {
+    outcome: Outcome
+}
+
+#[derive(Debug)]
+pub struct IPEndpointAddrToIPAddrErr(IPEndpointAddr);
+
+#[derive(Debug)]
+pub struct BadIPEndpoint(String);
+
+impl<Outcome> From<Outcome> for PassthruSessionNegotiation<Outcome> {
     #[inline]
-    fn default() -> Self {
-        PassthruDatagramXfrmParam
+    fn from(val: Outcome) -> PassthruSessionNegotiation<Outcome> {
+        PassthruSessionNegotiation { outcome: val }
+    }
+}
+
+impl Session for UnixStream {
+    type LocalAddr = UnixSocketAddr;
+    type PeerAddr = UnixSocketAddr;
+
+    #[inline]
+    fn local_addr(&self) -> Result<Self::LocalAddr, Error> {
+        self.local_addr().map(UnixSocketAddr::from)
+    }
+
+    #[inline]
+    fn peer_addr(&self) -> Result<Self::PeerAddr, Error> {
+        self.peer_addr().map(UnixSocketAddr::from)
+    }
+}
+
+impl<T> Session for Rc<T>
+where
+    T: Session
+{
+    type LocalAddr = T::LocalAddr;
+    type PeerAddr = T::PeerAddr;
+
+    #[inline]
+    fn local_addr(&self) -> Result<Self::LocalAddr, Error> {
+        self.as_ref().local_addr()
+    }
+
+    #[inline]
+    fn peer_addr(&self) -> Result<Self::PeerAddr, Error> {
+        self.as_ref().peer_addr()
+    }
+}
+
+impl<T> Session for RefCell<T>
+where
+    T: Session
+{
+    type LocalAddr = T::LocalAddr;
+    type PeerAddr = T::PeerAddr;
+
+    #[inline]
+    fn local_addr(&self) -> Result<Self::LocalAddr, Error> {
+        self.try_borrow()
+            .map_err(Error::other)?
+            .deref()
+            .local_addr()
+    }
+
+    #[inline]
+    fn peer_addr(&self) -> Result<Self::PeerAddr, Error> {
+        self.try_borrow().map_err(Error::other)?.deref().peer_addr()
+    }
+}
+
+impl Session for TcpStream {
+    type LocalAddr = SocketAddr;
+    type PeerAddr = SocketAddr;
+
+    #[inline]
+    fn local_addr(&self) -> Result<Self::LocalAddr, Error> {
+        self.local_addr()
+    }
+
+    #[inline]
+    fn peer_addr(&self) -> Result<Self::PeerAddr, Error> {
+        self.peer_addr()
+    }
+}
+
+impl<T, Party, Msg> SharedMsgs<Party, Msg> for Arc<Mutex<T>>
+where
+    T: SharedMsgs<Party, Msg>
+{
+    type MsgsError = WithMutexPoison<T::MsgsError>;
+
+    #[inline]
+    fn msgs(
+        &mut self,
+        live: &HashSet<Party>,
+        now: Instant
+    ) -> Result<
+        (Option<Vec<(Vec<Party>, Vec<Msg>)>>, Option<Instant>),
+        Self::MsgsError
+    > {
+        self.lock()
+            .map_err(|_| WithMutexPoison::MutexPoison)?
+            .msgs(live, now)
+            .map_err(|err| WithMutexPoison::Inner { err: err })
+    }
+}
+
+impl<T, Msg> PrivateMsgs<Msg> for Arc<Mutex<T>>
+where
+    T: PrivateMsgs<Msg>
+{
+    type MsgsError = WithMutexPoison<T::MsgsError>;
+
+    #[inline]
+    fn msgs(
+        &mut self,
+        now: Instant
+    ) -> Result<(Option<Vec<Msg>>, Option<Instant>), Self::MsgsError> {
+        self.lock()
+            .map_err(|_| WithMutexPoison::MutexPoison)?
+            .msgs(now)
+            .map_err(|err| WithMutexPoison::Inner { err: err })
+    }
+}
+
+impl Negotiator<()> for TrivialNegotiator {
+    type NegotiateError = Infallible;
+    type Pending = Infallible;
+    type State = ();
+
+    #[inline]
+    fn negotiate(
+        &self,
+        _state: ()
+    ) -> Result<NegotiatorResult<(), Self::Pending>, Self::NegotiateError> {
+        Ok(NegotiatorResult::Complete(()))
+    }
+
+    #[inline]
+    fn complete_negotiate(
+        &self,
+        _err: Infallible
+    ) -> Result<NegotiatorResult<(), Self::Pending>, Self::NegotiateError> {
+        panic!("This should never be called!")
+    }
+}
+
+impl<Stream> NegotiatorStart<(), Stream> for TrivialNegotiator
+where
+    Stream: Read + Write
+{
+    type Param = ();
+    type StartError = Infallible;
+
+    #[inline]
+    fn start(
+        &self,
+        _param: &(),
+        _stream: Stream
+    ) -> Result<Self::State, Self::StartError> {
+        Ok(())
+    }
+}
+
+impl<Stream> Negotiator<Stream> for PassthruNegotiator {
+    type NegotiateError = Infallible;
+    type Pending = Infallible;
+    type State = PassthruSessionNegotiation<Stream>;
+
+    #[inline]
+    fn negotiate(
+        &self,
+        state: PassthruSessionNegotiation<Stream>
+    ) -> Result<NegotiatorResult<Stream, Self::Pending>, Self::NegotiateError>
+    {
+        Ok(NegotiatorResult::Complete(state.outcome))
+    }
+
+    #[inline]
+    fn complete_negotiate(
+        &self,
+        _err: Infallible
+    ) -> Result<NegotiatorResult<Stream, Self::Pending>, Self::NegotiateError>
+    {
+        panic!("This should never be called!")
+    }
+}
+
+impl<Stream> NegotiatorStart<Stream, Stream> for PassthruNegotiator {
+    type Param = ();
+    type StartError = Infallible;
+
+    #[inline]
+    fn start(
+        &self,
+        _param: &(),
+        stream: Stream
+    ) -> Result<Self::State, Self::StartError> {
+        Ok(PassthruSessionNegotiation { outcome: stream })
     }
 }
 
@@ -404,7 +728,7 @@ impl<Addr> Default for PassthruDatagramXfrm<Addr> {
 
 impl<Addr> DatagramXfrm for PassthruDatagramXfrm<Addr>
 where
-    Addr: Clone + Display + Eq + Send
+    Addr: Clone + Debug + Display + Eq + Hash + Send
 {
     type Error = Infallible;
     type LocalAddr = Addr;
@@ -448,9 +772,25 @@ where
     }
 }
 
-impl<Addr> DatagramXfrmCreate for PassthruDatagramXfrm<Addr>
+impl<Addr> CreateWithParam<Addr> for PassthruDatagramXfrm<Addr>
 where
     Addr: Clone + Display + Eq + Send
+{
+    type Config = PassthruDatagramXfrmParam;
+    type CreateError = Infallible;
+
+    #[inline]
+    fn create(
+        _param: PassthruDatagramXfrmParam,
+        _addr: Addr
+    ) -> Result<Self, Infallible> {
+        Ok(PassthruDatagramXfrm::default())
+    }
+}
+
+impl<Addr> DatagramXfrmCreate for PassthruDatagramXfrm<Addr>
+where
+    Addr: Clone + Debug + Display + Eq + Hash + Send
 {
     type Addr = Addr;
     type CreateParam = PassthruDatagramXfrmParam;
@@ -488,7 +828,7 @@ impl IPEndpointAddr {
     ///
     /// assert_eq!(
     ///     IPEndpointAddr::ip(IpAddr::V4(Ipv4Addr::new(10, 10, 10, 10))),
-    ///     serde_yaml::from_str(yaml).unwrap()
+    ///     yaml_serde::from_str(yaml).unwrap()
     /// );
     /// ```
     #[inline]
@@ -510,7 +850,7 @@ impl IPEndpointAddr {
     ///
     /// assert_eq!(
     ///     IPEndpointAddr::name(String::from("en.wikipedia.org")),
-    ///     serde_yaml::from_str(yaml).unwrap()
+    ///     yaml_serde::from_str(yaml).unwrap()
     /// );
     /// ```
     #[inline]
@@ -547,13 +887,12 @@ impl IPEndpoint {
     /// # use constellation_common::net::IPEndpointAddr;
     /// # use constellation_common::net::IPEndpoint;
     /// #
-    /// let yaml = concat!("addr: en.wikipedia.org\n",
-    ///                    "port: 443\n");
+    /// let yaml = concat!("en.wikipedia.org:443\n");
     /// let ip = IPEndpointAddr::name(String::from("en.wikipedia.org"));
     ///
     /// assert_eq!(
     ///     IPEndpoint::new(ip, 443),
-    ///     serde_yaml::from_str(yaml).unwrap()
+    ///     yaml_serde::from_str(yaml).unwrap()
     /// );
     /// ```
     #[inline]
@@ -575,7 +914,7 @@ impl IPEndpoint {
 
     /// Get the [IPEndpointAddr] component.
     #[inline]
-    pub fn ip_endpoint(&self) -> &IPEndpointAddr {
+    pub fn ip_addr(&self) -> &IPEndpointAddr {
         &self.addr
     }
 
@@ -586,12 +925,212 @@ impl IPEndpoint {
     }
 }
 
+impl<T, R> NegotiatorResult<T, R> {
+    /// Apply a mapping function to the success result.
+    #[inline]
+    pub fn map<F, S>(
+        self,
+        f: F
+    ) -> NegotiatorResult<S, R>
+    where
+        F: FnOnce(T) -> S {
+        match self {
+            NegotiatorResult::Complete(val) => {
+                NegotiatorResult::Complete(f(val))
+            }
+            NegotiatorResult::Pending(pending) => {
+                NegotiatorResult::Pending(pending)
+            }
+        }
+    }
+
+    /// Apply a mapping function to the pending result.
+    #[inline]
+    pub fn map_pending<F, Q>(
+        self,
+        f: F
+    ) -> NegotiatorResult<T, Q>
+    where
+        F: FnOnce(R) -> Q {
+        match self {
+            NegotiatorResult::Complete(val) => NegotiatorResult::Complete(val),
+            NegotiatorResult::Pending(pending) => {
+                NegotiatorResult::Pending(f(pending))
+            }
+        }
+    }
+
+    /// Apply an error-producing mapping function to the success result.
+    #[inline]
+    pub fn map_ok<F, S, E>(
+        self,
+        f: F
+    ) -> Result<NegotiatorResult<S, R>, E>
+    where
+        F: FnOnce(T) -> Result<S, E> {
+        match self {
+            NegotiatorResult::Complete(val) => {
+                Ok(NegotiatorResult::Complete(f(val)?))
+            }
+            NegotiatorResult::Pending(pending) => {
+                Ok(NegotiatorResult::Pending(pending))
+            }
+        }
+    }
+
+    /// Apply an error-producing mapping function to the pending result.
+    #[inline]
+    pub fn map_pending_ok<F, Q, E>(
+        self,
+        f: F
+    ) -> Result<NegotiatorResult<T, Q>, E>
+    where
+        F: FnOnce(R) -> Result<Q, E> {
+        match self {
+            NegotiatorResult::Complete(val) => {
+                Ok(NegotiatorResult::Complete(val))
+            }
+            NegotiatorResult::Pending(pending) => {
+                Ok(NegotiatorResult::Pending(f(pending)?))
+            }
+        }
+    }
+
+    /// Apply a mapping function to the success result.
+    #[inline]
+    pub fn flat_map<F, S>(
+        self,
+        f: F
+    ) -> NegotiatorResult<S, R>
+    where
+        F: FnOnce(T) -> NegotiatorResult<S, R> {
+        match self {
+            NegotiatorResult::Complete(val) => f(val),
+            NegotiatorResult::Pending(pending) => {
+                NegotiatorResult::Pending(pending)
+            }
+        }
+    }
+
+    /// Apply a mapping function to the pending result.
+    #[inline]
+    pub fn flat_map_pending<F, Q>(
+        self,
+        f: F
+    ) -> NegotiatorResult<T, Q>
+    where
+        F: FnOnce(R) -> NegotiatorResult<T, Q> {
+        match self {
+            NegotiatorResult::Complete(val) => NegotiatorResult::Complete(val),
+            NegotiatorResult::Pending(pending) => f(pending)
+        }
+    }
+
+    /// Apply an error-producing mapping function to the success result.
+    #[inline]
+    pub fn flat_map_ok<F, S, E>(
+        self,
+        f: F
+    ) -> Result<NegotiatorResult<S, R>, E>
+    where
+        F: FnOnce(T) -> Result<NegotiatorResult<S, R>, E> {
+        match self {
+            NegotiatorResult::Complete(val) => f(val),
+            NegotiatorResult::Pending(pending) => {
+                Ok(NegotiatorResult::Pending(pending))
+            }
+        }
+    }
+
+    /// Apply an error-producing mapping function to the pending result.
+    #[inline]
+    pub fn flat_map_pending_ok<F, Q, E>(
+        self,
+        f: F
+    ) -> Result<NegotiatorResult<T, Q>, E>
+    where
+        F: FnOnce(R) -> Result<NegotiatorResult<T, Q>, E> {
+        match self {
+            NegotiatorResult::Complete(val) => {
+                Ok(NegotiatorResult::Complete(val))
+            }
+            NegotiatorResult::Pending(pending) => f(pending)
+        }
+    }
+
+    /// Apply a function to the success result.
+    #[inline]
+    pub fn app<F>(
+        self,
+        f: F
+    ) where
+        F: FnOnce(T) {
+        if let NegotiatorResult::Complete(val) = self {
+            f(val)
+        }
+    }
+
+    /// Apply a function to the pending result.
+    #[inline]
+    pub fn app_pending<F>(
+        self,
+        f: F
+    ) where
+        F: FnOnce(R) {
+        if let NegotiatorResult::Pending(pending) = self {
+            f(pending)
+        }
+    }
+
+    /// Apply a function to the success result.
+    #[inline]
+    pub fn inspect<F>(
+        &self,
+        f: F
+    ) where
+        F: FnOnce(&T) {
+        if let NegotiatorResult::Complete(val) = self {
+            f(val)
+        }
+    }
+
+    /// Apply a function to the pending result.
+    #[inline]
+    pub fn inspect_pending<F>(
+        &self,
+        f: F
+    ) where
+        F: FnOnce(&R) {
+        if let NegotiatorResult::Pending(pending) = self {
+            f(pending)
+        }
+    }
+}
+
+impl From<(String, u16)> for IPEndpoint {
+    #[inline]
+    fn from(val: (String, u16)) -> Self {
+        let name = IPEndpointAddr::name(val.0);
+
+        IPEndpoint::new(name, val.1)
+    }
+}
+
+impl Display for IPEndpointAddrToIPAddrErr {
+    fn fmt(
+        &self,
+        f: &mut Formatter
+    ) -> Result<(), std::fmt::Error> {
+        write!(f, "cannot convert {} to IP address", self.0)
+    }
+}
+
 impl Display for IPEndpoint {
     fn fmt(
         &self,
         f: &mut Formatter
     ) -> Result<(), std::fmt::Error> {
-        write!(f, "{}:{}", self.ip_endpoint(), self.port())
+        write!(f, "{}:{}", self.ip_addr(), self.port())
     }
 }
 
@@ -601,9 +1140,18 @@ impl Display for IPEndpointAddr {
         f: &mut Formatter
     ) -> Result<(), std::fmt::Error> {
         match self {
-            IPEndpointAddr::Addr(addr) => addr.fmt(f),
-            IPEndpointAddr::Name(name) => name.fmt(f)
+            IPEndpointAddr::Addr(addr) => write!(f, "{}", addr),
+            IPEndpointAddr::Name(name) => write!(f, "{}", name)
         }
+    }
+}
+
+impl Display for BadIPEndpoint {
+    fn fmt(
+        &self,
+        f: &mut Formatter
+    ) -> Result<(), std::fmt::Error> {
+        write!(f, "invalid address format \"{}\"", self.0)
     }
 }
 
@@ -656,12 +1204,46 @@ impl From<IpAddr> for IPEndpointAddr {
     }
 }
 
+impl TryFrom<IPEndpointAddr> for IpAddr {
+    type Error = IPEndpointAddrToIPAddrErr;
+
+    #[inline]
+    fn try_from(
+        val: IPEndpointAddr
+    ) -> Result<IpAddr, IPEndpointAddrToIPAddrErr> {
+        match val {
+            IPEndpointAddr::Addr(ip) => Ok(ip),
+            IPEndpointAddr::Name(_) => Err(IPEndpointAddrToIPAddrErr(val))
+        }
+    }
+}
+
+impl From<&'_ str> for IPEndpointAddr {
+    #[inline]
+    fn from(val: &str) -> IPEndpointAddr {
+        let Ok(out) = val.parse();
+
+        out
+    }
+}
+
 impl From<String> for IPEndpointAddr {
     #[inline]
     fn from(val: String) -> IPEndpointAddr {
-        match IpAddr::from_str(&val) {
-            Ok(addr) => IPEndpointAddr::Addr(addr),
-            Err(_) => IPEndpointAddr::Name(val)
+        let Ok(out) = val.parse();
+
+        out
+    }
+}
+
+impl FromStr for IPEndpointAddr {
+    type Err = Infallible;
+
+    #[inline]
+    fn from_str(str: &str) -> Result<IPEndpointAddr, Infallible> {
+        match IpAddr::from_str(str) {
+            Ok(addr) => Ok(IPEndpointAddr::Addr(addr)),
+            Err(_) => Ok(IPEndpointAddr::Name(str.to_string()))
         }
     }
 }
@@ -673,6 +1255,59 @@ impl From<SocketAddr> for IPEndpoint {
             SocketAddr::V4(addr) => IPEndpoint::from(addr),
             SocketAddr::V6(addr) => IPEndpoint::from(addr)
         }
+    }
+}
+
+impl TryFrom<IPEndpoint> for SocketAddr {
+    type Error = IPEndpointAddrToIPAddrErr;
+
+    #[inline]
+    fn try_from(
+        val: IPEndpoint
+    ) -> Result<SocketAddr, IPEndpointAddrToIPAddrErr> {
+        let addr = val.addr.try_into()?;
+
+        Ok(SocketAddr::new(addr, val.port))
+    }
+}
+
+impl TryFrom<String> for IPEndpoint {
+    type Error = BadIPEndpoint;
+
+    #[inline]
+    fn try_from(str: String) -> Result<IPEndpoint, BadIPEndpoint> {
+        Self::try_from(str.as_str())
+    }
+}
+
+impl TryFrom<&'_ str> for IPEndpoint {
+    type Error = BadIPEndpoint;
+
+    #[inline]
+    fn try_from(str: &str) -> Result<IPEndpoint, BadIPEndpoint> {
+        str.parse()
+    }
+}
+
+impl FromStr for IPEndpoint {
+    type Err = BadIPEndpoint;
+
+    fn from_str(str: &str) -> Result<IPEndpoint, BadIPEndpoint> {
+        let (addr, port) = match str.strip_prefix('[') {
+            Some(val) => {
+                val.split_once("]:").ok_or(BadIPEndpoint(str.to_string()))?
+            }
+            None => {
+                str.rsplit_once(':').ok_or(BadIPEndpoint(str.to_string()))?
+            }
+        };
+        let addr = IPEndpointAddr::from(addr);
+        let port = port.parse().map_err(|_| BadIPEndpoint(str.to_string()))?;
+
+        Ok(IPEndpoint {
+            addr: addr,
+            port: port
+        })
     }
 }
 
@@ -696,56 +1331,54 @@ impl From<SocketAddrV6> for IPEndpoint {
     }
 }
 
-impl Serialize for IPEndpointAddr {
-    fn serialize<S>(
-        &self,
-        serializer: S
-    ) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer {
-        match self {
-            IPEndpointAddr::Addr(addr) => {
-                serializer.serialize_str(&addr.to_string())
-            }
-            IPEndpointAddr::Name(name) => serializer.serialize_str(name)
-        }
+impl From<IPEndpointAddr> for String {
+    #[inline]
+    fn from(val: IPEndpointAddr) -> String {
+        val.to_string()
+    }
+}
+
+impl From<IPEndpoint> for String {
+    #[inline]
+    fn from(val: IPEndpoint) -> String {
+        val.to_string()
     }
 }
 
 #[test]
 fn test_deserialize_tcp_cfg_ipv4_addr() {
-    let yaml = concat!("addr: 10.10.10.10\n", "port: 1024");
+    let yaml = concat!("10.10.10.10:1024");
     let addr = IpAddr::V4(Ipv4Addr::new(10, 10, 10, 10));
     let expected = IPEndpoint {
         addr: IPEndpointAddr::Addr(addr),
         port: 1024
     };
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
 
 #[test]
 fn test_deserialize_tcp_cfg_ipv6_addr() {
-    let yaml = concat!("addr: 1:29:3a:4b:5c:6d:7e:8f\n", "port: 1024");
+    let yaml = concat!("\'[1:29:3a:4b:5c:6d:7e:8f]:1024\'");
     let addr = Ipv6Addr::new(0x1, 0x29, 0x3a, 0x4b, 0x5c, 0x6d, 0x7e, 0x8f);
     let expected = IPEndpoint {
         addr: IPEndpointAddr::Addr(IpAddr::V6(addr)),
         port: 1024
     };
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
 
 #[test]
 fn test_deserialize_tcp_cfg_domain() {
-    let yaml = concat!("addr: example.com\n", "port: 1024");
+    let yaml = concat!("example.com:1024");
     let expected = IPEndpoint {
         addr: IPEndpointAddr::Name(String::from("example.com")),
         port: 1024
     };
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
@@ -754,7 +1387,7 @@ fn test_deserialize_tcp_cfg_domain() {
 fn test_deserialize_ip_endpoint_domain() {
     let yaml = "example.com";
     let expected = IPEndpointAddr::Name(String::from(yaml));
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
@@ -764,7 +1397,7 @@ fn test_deserialize_ip_endpoint_ipv4() {
     let yaml = "10.10.10.10";
     let expected =
         IPEndpointAddr::Addr(IpAddr::V4(Ipv4Addr::new(10, 10, 10, 10)));
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
@@ -774,7 +1407,7 @@ fn test_deserialize_ip_endpoint_ipv6() {
     let yaml = "1:29:3a:4b:5c:6d:7e:8f";
     let addr = Ipv6Addr::new(0x1, 0x29, 0x3a, 0x4b, 0x5c, 0x6d, 0x7e, 0x8f);
     let expected = IPEndpointAddr::Addr(IpAddr::V6(addr));
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }
@@ -784,7 +1417,7 @@ fn test_deserialize_ip_endpoint_ipv6_localhost() {
     let yaml = "::1";
     let addr = Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1);
     let expected = IPEndpointAddr::Addr(IpAddr::V6(addr));
-    let actual = serde_yaml::from_str(yaml).unwrap();
+    let actual = yaml_serde::from_str(yaml).unwrap();
 
     assert_eq!(expected, actual)
 }

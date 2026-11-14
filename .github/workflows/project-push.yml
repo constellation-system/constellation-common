@@ -4,7 +4,7 @@ run-name: Push to ${{ github.ref_name }} by ${{ github.actor }}
 
 env:
   LINT_FLAGS: -W clippy::all -W clippy::pedantic -W clippy::cargo
-  RUST_TOOLCHAIN: 'nightly-2024-11-28'
+  RUST_NIGHTLY_TOOLCHAIN: 'nightly-2026-08-14'
   LLVM_VERSION: 19
 
 on:
@@ -22,10 +22,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         env:
           cache-name: cache-rust-crates
         with:
@@ -38,8 +38,8 @@ jobs:
       - name: Setup toolchain
         uses: actions-rs/toolchain@v1
         with:
+          toolchain: ${{ env.RUST_NIGHTLY_TOOLCHAIN }}
           profile: minimal
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
           override: true
           components: rustfmt
 
@@ -61,10 +61,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         env:
           cache-name: cache-rust-crates
         with:
@@ -77,8 +77,8 @@ jobs:
       - name: Setup toolchain
         uses: actions-rs/toolchain@v1
         with:
+          toolchain: stable
           profile: minimal
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
           override: true
 
       - name: Install GSSAPI development packages
@@ -99,10 +99,10 @@ jobs:
       checks: write
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         env:
           cache-name: cache-rust-crates
         with:
@@ -115,8 +115,8 @@ jobs:
       - name: Setup toolchain
         uses: actions-rs/toolchain@v1
         with:
+          toolchain: stable
           profile: minimal
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
           override: true
           components: clippy
 
@@ -138,10 +138,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         env:
           cache-name: cache-rust-crates
         with:
@@ -161,10 +161,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         env:
           cache-name: cache-rust-crates
         with:

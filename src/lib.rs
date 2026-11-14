@@ -1,4 +1,4 @@
-// Copyright © 2024-25 The Johns Hopkins Applied Physics Laboratory LLC.
+// Copyright © 2024-26 The Johns Hopkins Applied Physics Laboratory LLC.
 //
 // This program is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public License,
@@ -29,7 +29,6 @@
 //!
 //! * Placing the functionality in another package results in a dependency
 //!   cycle, or otherwise pointless dependency relationships.
-#![feature(peer_credentials_unix_socket)]
 #![allow(clippy::redundant_field_names)]
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::too_many_arguments)]
@@ -51,6 +50,8 @@ pub mod retry;
 pub mod sched;
 pub mod shutdown;
 pub mod sync;
+pub mod unix;
+pub mod util;
 pub mod version;
 
 #[cfg(test)]
