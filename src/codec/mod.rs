@@ -21,7 +21,7 @@
 //! This module defines traits for codecs used by other Constellation
 //! APIs.  Constellation relies on explicit codec objects for encoding
 //! and decoding objects for transmission over the network, as opposed
-//! to the [serde] framework.  This is done for several reasons:
+//! to the [`serde`] framework.  This is done for several reasons:
 //!
 //! - It allows the exact formats of messages to vary for different channels.
 //!
@@ -46,9 +46,9 @@ use crate::error::ScopedError;
 /// Trait for encoding/decoding logic from types to datagrams of
 /// constant size.
 ///
-/// This only provides the [MAX_BYTES](DatagramCodec::MAX_BYTES)
-/// constant; actual encoding/decoding logic is provided by [Encoder]
-/// and [Decoder].
+/// This only provides the [`MAX_BYTES`](DatagramCodec::MAX_BYTES)
+/// constant; actual encoding/decoding logic is provided by [`Encoder`]
+/// and [`Decoder`].
 ///
 /// # Type Parameters
 ///
@@ -67,7 +67,7 @@ pub trait Encoder<T: ?Sized> {
     /// Errors that can occur when encoding.
     type EncodeError: Debug + Display + ScopedError;
 
-    /// Get a safe size for buffers for [encode](Encoder::encode)ing
+    /// Get a safe size for buffers for [`encode`](Encoder::encode)ing
     /// `val`.
     ///
     /// This can return a size larger than needed.
@@ -83,7 +83,7 @@ pub trait Encoder<T: ?Sized> {
     /// Encode a message into `buf` and return the number of bytes produced.
     ///
     /// The slice `buf` must contain at least
-    /// [MAX_BYTES](DatagramCodec::MAX_BYTES) bytes.
+    /// [`MAX_BYTES`](DatagramCodec::MAX_BYTES) bytes.
     ///
     /// # Parameters
     ///
@@ -96,7 +96,7 @@ pub trait Encoder<T: ?Sized> {
         buf: &mut [u8]
     ) -> Result<usize, Self::EncodeError>;
 
-    /// Encode `val` to a newly-allocated [Vec].
+    /// Encode `val` to a newly-allocated [`Vec`].
     ///
     /// # Parameters
     ///
@@ -126,7 +126,7 @@ pub trait Decoder<T> {
     /// Decode a message from `buf` and return the number of bytes consumed.
     ///
     /// The slice `buf` must contain at least
-    /// [MAX_BYTES](DatagramCodec::MAX_BYTES) bytes.
+    /// [`MAX_BYTES`](DatagramCodec::MAX_BYTES) bytes.
     ///
     /// # Parameters
     ///
@@ -150,7 +150,7 @@ pub trait BytestreamEncoder<T: ?Sized> {
     ///
     /// # Type Parameters
     ///
-    /// - `W`: The type of bytestream [Write]rs used.
+    /// - `W`: The type of bytestream [`Write`]rs used.
     ///
     /// # Parameters
     ///
@@ -166,7 +166,7 @@ pub trait BytestreamEncoder<T: ?Sized> {
         W: Write;
 }
 
-/// Trait for decoding logic from a bytestream [Read]er to a `T`.
+/// Trait for decoding logic from a bytestream [`Read`]er to a `T`.
 ///
 /// # Type Parameters
 ///
@@ -177,16 +177,13 @@ pub trait BytestreamDecoder<T> {
     /// Decode a message from `stream` and return the number of bytes
     /// consumed.
     ///
-    /// The slice `buf` must contain at least
-    /// [MAX_BYTES](DatagramCodec::MAX_BYTES) bytes.
-    ///
     /// # Type Parameters
     ///
     /// - `R`: Type of bytestream [Read]ers used.
     ///
     /// # Parameters
     ///
-    /// - `stream`: Bytestream [Read]er from which to read the message.
+    /// - `stream`: Bytestream [`Read`]er from which to read the message.
     fn decode_from_stream<R>(
         &mut self,
         stream: &mut R
@@ -195,15 +192,21 @@ pub trait BytestreamDecoder<T> {
         R: Read;
 }
 
-/// Simple [Encoder]/[Decoder] instance for a `usize`.
+// XXX Get rid of these codecs and use PER-formatted basic types instead.
+
+/// Simple [`Encoder`]/[`Decoder`] instance for a `usize`.
 ///
-/// This is intended primarily for testing.
+/// This is intended primarily for testing.  This will either be
+/// eliminated and replaced, or else moved into [`mod@test`].
 pub struct USizeCodec;
 
-/// Simple [Encoder]/[Decoder] instance for a `isize`.
+/// Simple [`Encoder`]/[`Decoder`] instance for a `isize`.
 ///
-/// This is intended primarily for testing.
+/// This is intended primarily for testing.  This will either be
+/// eliminated and replaced, or else moved into [`mod@test`].
 pub struct ISizeCodec;
+
+// XXX This is redundant with test.
 
 /// Error indicating the buffer was too short.
 #[derive(Debug)]

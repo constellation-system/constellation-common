@@ -18,7 +18,7 @@
 
 //! Generalized scheduling implementation.
 //!
-//! This module provides [Scheduler], which generalizes and abstracts
+//! This module provides [`Scheduler`], which generalizes and abstracts
 //! much of the implementation of an OS-type scheduler that maintains
 //! a history of successes and failures for multiple different items,
 //! and selects from among them at various points.
@@ -41,7 +41,13 @@ use crate::error::ScopedError;
 use crate::retry::Retry;
 use crate::retry::RetryIndefResult;
 
+// XXX have this extend Create
+
 /// Trait for histories that are used to determine scores for scheduling.
+///
+/// This is an abstraction over the information used to make
+/// scheduling decisions.  Its function is to provide a score that
+/// indicates the scheduler's preference.
 pub trait History {
     /// Type of configuration information.
     type Config;
@@ -83,6 +89,8 @@ pub trait History {
     fn nretries(&self) -> usize;
 
     /// Get the score for this history.
+    ///
+    /// Higher scores will be preferred by the scheduler.
     fn score(
         &self,
         config: &Self::Config,
@@ -97,19 +105,34 @@ pub trait Policy {
     type Item: Clone + Display + Eq + Hash;
 
     /// Compare two item's
+    ///
+    /// This is similar to [`Ord::cmp`], but permits the policy to
+    /// affect the ordering.
     fn cmp_items(
         &self,
         a: &Self::Item,
         b: &Self::Item
     ) -> Ordering;
 
-    /// Filter the item's in `items` according to the policy.
-    fn filter<I, Origin>(
+    /// Filter the items according to the policy.
+    ///
+    /// This permits a `Policy` to exclude some possible items.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `I`: Type of item iterator.
+    ///
+    /// - `Extra`: Type of extra data that is carried with items.
+    ///
+    /// # Parameters
+    ///
+    /// - items: [`Iterator`] of items to be filtered.
+    fn filter<I, Extra>(
         &self,
         items: I
-    ) -> Vec<(Self::Item, Origin)>
+    ) -> Vec<(Self::Item, Extra)>
     where
-        I: Iterator<Item = (Self::Item, Origin)> {
+        I: Iterator<Item = (Self::Item, Extra)> {
         items.filter(|(x, _)| self.check(x)).collect()
     }
 
@@ -121,13 +144,15 @@ pub trait Policy {
 }
 
 /// Epoch-specfic dense integer index for a given item.
+///
+/// This permits items in an epoch to be stored efficiently.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct DenseItemID<Epoch> {
     epoch: Epoch,
     id: usize
 }
 
-/// A simple [Policy] that does not filter inputs.
+/// A simple [`Policy`] that does not filter inputs.
 pub struct PassthruPolicy<Item>(PhantomData<Item>);
 
 /// Record of a single item.
@@ -143,11 +168,11 @@ struct Record<H: History> {
 
 /// Scheduler for multiple possible addresses.
 #[derive(Clone, Debug)]
-struct MultiSched<Item, Origin, H: History> {
+struct MultiSched<Item, Extra, H: History> {
     /// Mapping of items to dense indexes.
     ids: HashMap<Item, usize>,
     /// Mapping from dense indexes to records.
-    items: Vec<(Item, Origin, Record<H>)>,
+    items: Vec<(Item, Extra, Record<H>)>,
     // ISSUE #9: at present, this is implemented as a lazily-sorted array.
     // We can do better with a binary heap, but the default Rust one
     // doesn't provide an easy way to update scores.
@@ -155,10 +180,10 @@ struct MultiSched<Item, Origin, H: History> {
     ordering: Vec<usize>
 }
 
-enum SchedState<Item, Origin, H: History> {
+enum SchedState<Item, Extra, H: History> {
     /// Multiple possible addresses.
     Multi {
-        sched: MultiSched<Item, Origin, H>,
+        sched: MultiSched<Item, Extra, H>,
         /// Time of the last refresh.
         latest: Instant
     },
@@ -166,7 +191,7 @@ enum SchedState<Item, Origin, H: History> {
         /// History configuration.
         record: Record<H>,
         single: Item,
-        origin: Origin,
+        origin: Extra,
         /// Time of the last refresh.
         latest: Instant
     },
@@ -176,15 +201,15 @@ enum SchedState<Item, Origin, H: History> {
 
 /// Information about an epoch change.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct EpochChange<Epoch, Item, Origin> {
+pub struct EpochChange<Epoch, Item, Extra> {
     /// The epoch ID.
     id: Epoch,
     /// Mapping of all `Item`s to a dense range of integers.
-    dense_ids: Vec<(Item, Origin)>,
+    dense_ids: Vec<(Item, Extra)>,
     /// New addresses added in this epoch.
-    added: Option<Vec<(Item, Origin)>>,
+    added: Option<Vec<(Item, Extra)>>,
     /// Existing addrcesses removed in this epoch.
-    removed: Option<Vec<(Item, Origin)>>
+    removed: Option<Vec<(Item, Extra)>>
 }
 
 /// Scheduler for selecting among several different items and
@@ -198,7 +223,17 @@ pub struct EpochChange<Epoch, Item, Origin> {
 ///
 /// `Scheduler` is generally used to choose from among several different
 /// options for communicating with a given counterparty.
-pub struct Scheduler<Epochs: Iterator, H: History, P: Policy, Origin> {
+///
+/// # Type Parameters
+///
+/// - `Epochs`: [`Iterator`] used to obtain epoch IDs.
+///
+/// - `History`: [`History`] instance used to score items.
+///
+/// - `P`: [`Policy`] instance used to filter items.
+///
+/// - `Extra`: Ancillary data that is carried with items.
+pub struct Scheduler<Epochs: Iterator, H: History, P: Policy, Extra> {
     /// History configuration.
     config: H::Config,
     /// Policy for item's.
@@ -206,7 +241,7 @@ pub struct Scheduler<Epochs: Iterator, H: History, P: Policy, Origin> {
     /// Retry configuration.
     retry: Retry,
     /// Current state.
-    state: SchedState<P::Item, Origin, H>,
+    state: SchedState<P::Item, Extra, H>,
     /// Current epoch.
     epoch: Epochs::Item,
     /// Iterator to generate new epochs.
@@ -267,7 +302,7 @@ impl<Item> ScopedError for ReportError<Item> {
     }
 }
 
-impl<Epoch, Item, Origin> EpochChange<Epoch, Item, Origin> {
+impl<Epoch, Item, Extra> EpochChange<Epoch, Item, Extra> {
     /// Get the new epoch ID.
     #[inline]
     pub fn id(&self) -> &Epoch {
@@ -276,19 +311,19 @@ impl<Epoch, Item, Origin> EpochChange<Epoch, Item, Origin> {
 
     /// Get a mapping of dense IDs to item/origin pairs.
     #[inline]
-    pub fn dense_ids(&self) -> &[(Item, Origin)] {
+    pub fn dense_ids(&self) -> &[(Item, Extra)] {
         &self.dense_ids
     }
 
     /// Get the item/origin pairs that were added in this epoch.
     #[inline]
-    pub fn added(&self) -> Option<&Vec<(Item, Origin)>> {
+    pub fn added(&self) -> Option<&Vec<(Item, Extra)>> {
         self.added.as_ref()
     }
 
     /// Get the item/origin pairs that were removed in this epoch.
     #[inline]
-    pub fn removed(&self) -> Option<&Vec<(Item, Origin)>> {
+    pub fn removed(&self) -> Option<&Vec<(Item, Extra)>> {
         self.removed.as_ref()
     }
 
@@ -299,9 +334,9 @@ impl<Epoch, Item, Origin> EpochChange<Epoch, Item, Origin> {
         self
     ) -> (
         Epoch,
-        Vec<(Item, Origin)>,
-        Option<Vec<(Item, Origin)>>,
-        Option<Vec<(Item, Origin)>>
+        Vec<(Item, Extra)>,
+        Option<Vec<(Item, Extra)>>,
+        Option<Vec<(Item, Extra)>>
     ) {
         (self.id, self.dense_ids, self.added, self.removed)
     }
@@ -390,11 +425,11 @@ where
     }
 }
 
-impl<Item, Origin, H> MultiSched<Item, Origin, H>
+impl<Item, Extra, H> MultiSched<Item, Extra, H>
 where
     H: Clone + History,
     Item: Clone + Display + Eq + Hash,
-    Origin: Clone + Eq + Hash
+    Extra: Clone + Eq + Hash
 {
     /// Create a new `MultiSched` from its components.
     #[inline]
@@ -404,8 +439,8 @@ where
         items: I
     ) -> Self
     where
-        I: Iterator<Item = (Item, Origin)> {
-        let items: Vec<(Item, Origin, Record<H>)> = items
+        I: Iterator<Item = (Item, Extra)> {
+        let items: Vec<(Item, Extra, Record<H>)> = items
             .map(|(item, origin)| (item, origin, Record::new(config, now)))
             .collect();
         let mut ids = HashMap::with_capacity(items.len());
@@ -435,7 +470,7 @@ where
         &mut self,
         config: &H::Config,
         item: &Item,
-        origin: &Origin
+        origin: &Extra
     ) -> Result<(), ReportError<Item>> {
         match self.ids.get_mut(item) {
             Some(idx) if origin == &self.items[*idx].1 => {
@@ -468,7 +503,7 @@ where
     fn set_active(
         &mut self,
         item: &Item,
-        origin: &Origin,
+        origin: &Extra,
         active: bool
     ) -> Result<(), ReportError<Item>> {
         match self.ids.get_mut(item) {
@@ -503,7 +538,7 @@ where
         config: &H::Config,
         retry: &Retry,
         item: &Item,
-        origin: &Origin
+        origin: &Extra
     ) -> Result<(), ReportError<Item>> {
         match self.ids.get_mut(item) {
             Some(idx) if origin == &self.items[*idx].1 => {
@@ -556,7 +591,7 @@ where
     }
 
     fn fixup_ordering<P>(
-        items: &mut [(Item, Origin, Record<H>)],
+        items: &mut [(Item, Extra, Record<H>)],
         ordering: &mut [usize],
         config: &H::Config,
         policy: &P
@@ -608,7 +643,7 @@ where
         &mut self,
         config: &H::Config,
         policy: &P
-    ) -> RetryIndefResult<(Item, Origin, usize)>
+    ) -> RetryIndefResult<(Item, Extra, usize)>
     where
         P: Policy<Item = Item> {
         // The ordering array should always be nonzero, but check anyway.
@@ -667,8 +702,8 @@ where
     fn convert_to_single(
         &mut self,
         target: &Item,
-        target_origin: &Origin
-    ) -> (Option<Record<H>>, Vec<(Item, Origin)>) {
+        target_origin: &Extra
+    ) -> (Option<Record<H>>, Vec<(Item, Extra)>) {
         let mut out = None;
         let mut removed = Vec::with_capacity(self.items.len());
 
@@ -699,11 +734,11 @@ where
         target: &Item,
         existing: &Record<H>,
         items: I
-    ) -> (Self, Vec<(Item, Origin)>, bool)
+    ) -> (Self, Vec<(Item, Extra)>, bool)
     where
-        I: Iterator<Item = (Item, Origin)> {
+        I: Iterator<Item = (Item, Extra)> {
         let mut removed = true;
-        let items: Vec<(Item, Origin, Record<H>)> = items
+        let items: Vec<(Item, Extra, Record<H>)> = items
             .map(|(item, origin)| {
                 if &item != target {
                     (item, origin, Record::new(config, now))
@@ -752,12 +787,12 @@ where
         config: &H::Config,
         now: Instant,
         items: I
-    ) -> (Option<Vec<(Item, Origin)>>, Option<Vec<(Item, Origin)>>)
+    ) -> (Option<Vec<(Item, Extra)>>, Option<Vec<(Item, Extra)>>)
     where
-        I: Iterator<Item = (Item, Origin)> {
+        I: Iterator<Item = (Item, Extra)> {
         // Check if the address set is changing.
-        let mut items: HashSet<(Item, Origin)> = items.collect();
-        let mut existing: HashSet<(Item, Origin)> = self
+        let mut items: HashSet<(Item, Extra)> = items.collect();
+        let mut existing: HashSet<(Item, Extra)> = self
             .items
             .iter()
             .map(|(item, origin, _)| (item.clone(), origin.clone()))
@@ -767,7 +802,7 @@ where
             let mut added = Vec::with_capacity(items.len());
             // Build the new items array by trying to look up the old
             // records.
-            let items: Vec<(Item, Origin, Record<H>)> = items
+            let items: Vec<(Item, Extra, Record<H>)> = items
                 .drain()
                 .map(|(item, origin)| match self.ids.get(&item) {
                     // Make sure that the origins match too.
@@ -797,7 +832,7 @@ where
                 }
             }
 
-            let removed: Vec<(Item, Origin)> = existing
+            let removed: Vec<(Item, Extra)> = existing
                 .drain()
                 .filter(|(item, _)| !ids.contains_key(item))
                 .collect();
@@ -823,15 +858,25 @@ where
     }
 }
 
-impl<Epochs, H, P, Origin> Scheduler<Epochs, H, P, Origin>
+impl<Epochs, H, P, Extra> Scheduler<Epochs, H, P, Extra>
 where
-    Origin: Clone + Eq + Hash,
+    Extra: Clone + Eq + Hash,
     Epochs: Iterator,
     Epochs::Item: Clone + Eq,
     H: Clone + History,
     P: Policy
 {
     /// Create a new `Scheduler` from its components.
+    ///
+    /// # Parameters
+    ///
+    /// - `config`: Configuration used to create histories.
+    ///
+    /// - `retry`: [`Retry`] used to determine delays.
+    ///
+    /// - `policy`: Policy used to filter items.
+    ///
+    /// - `epochs`: ID generator for epochs.
     #[inline]
     pub fn new(
         config: H::Config,
@@ -859,14 +904,20 @@ where
     }
 
     /// Record a success for `item`.
+    ///
+    /// # Parameters
+    ///
+    /// - `item`: Item for which to record a success.
+    ///
+    /// - `extra`: Ancillary information associated with items.
     pub fn success(
         &mut self,
         item: &P::Item,
-        origin: &Origin
+        extra: &Extra
     ) -> Result<(), ReportError<P::Item>> {
         match &mut self.state {
             SchedState::Multi { sched, .. } => {
-                sched.success(&self.config, item, origin)
+                sched.success(&self.config, item, extra)
             }
             SchedState::Single { record, .. } => {
                 record.history.success(&self.config);
@@ -877,6 +928,11 @@ where
         }
     }
 
+    /// Record a success for an item ID.
+    ///
+    /// # Parameters
+    ///
+    /// - `id`: [`DenseItemID`] for which to record a success.
     pub fn success_id(
         &mut self,
         id: &DenseItemID<Epochs::Item>
@@ -900,15 +956,27 @@ where
         }
     }
 
+    /// Set whether an item is active.
+    ///
+    /// Setting an item inactive will result in it not being selected
+    /// by the scheduler.
+    ///
+    /// # Parameters
+    ///
+    /// - `item`: The item to set.
+    ///
+    /// - `extra`: Ancillary information associated with items.
+    ///
+    /// - `active`: Whether to set the item active or inactive.
     pub fn set_active(
         &mut self,
         item: &P::Item,
-        origin: &Origin,
+        extra: &Extra,
         active: bool
     ) -> Result<(), ReportError<P::Item>> {
         match &mut self.state {
             SchedState::Multi { sched, .. } => {
-                sched.set_active(item, origin, active)
+                sched.set_active(item, extra, active)
             }
             SchedState::Single { record, .. } => {
                 record.history.set_active(active);
@@ -919,6 +987,16 @@ where
         }
     }
 
+    /// Set whether an item is active by its ID.
+    ///
+    /// Setting an item inactive will result in it not being selected
+    /// by the scheduler.
+    ///
+    /// # Parameters
+    ///
+    /// - `id`: [`DenseItemID`] to set.
+    ///
+    /// - `active`: Whether to set the item active or inactive.
     pub fn set_active_id(
         &mut self,
         id: &DenseItemID<Epochs::Item>,
@@ -944,11 +1022,17 @@ where
     }
 
     /// Record a failure for `item`.
+    ///
+    /// # Parameters
+    ///
+    /// - `item`: Item for which to record a failure.
+    ///
+    /// - `extra`: Ancillary information associated with items.
     #[inline]
     pub fn failure(
         &mut self,
         item: &P::Item,
-        origin: &Origin
+        origin: &Extra
     ) -> Result<(), ReportError<P::Item>> {
         match &mut self.state {
             SchedState::Multi { sched, .. } => {
@@ -970,6 +1054,11 @@ where
         }
     }
 
+    /// Record a failure for an item ID.
+    ///
+    /// # Parameters
+    ///
+    /// - `id`: [`DenseItemID`] for which to record a failure.
     #[inline]
     pub fn failure_id(
         &mut self,
@@ -992,14 +1081,32 @@ where
         }
     }
 
-    /// Refresh this `AddrMultiplex` with new addresses.
+    /// Refresh this `Scheduler` with new item.
+    ///
+    /// This will generate a new epoch if the composition of the items
+    /// changes.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `I`: Type of [`Iterator`] over items.
+    ///
+    /// # Parameters
+    ///
+    /// - `now`: The time at which this occurs.
+    ///
+    /// - `iter`: [`Iterator`] over items.
+    ///
+    /// # Return Value
+    ///
+    /// The [`EpochChange`] information if the composition of the
+    /// items changed, or `None`.
     pub fn refresh<I>(
         &mut self,
         now: Instant,
         iter: I
-    ) -> Result<Option<EpochChange<Epochs::Item, P::Item, Origin>>, RefreshError>
+    ) -> Result<Option<EpochChange<Epochs::Item, P::Item, Extra>>, RefreshError>
     where
-        I: Iterator<Item = (P::Item, Origin)> {
+        I: Iterator<Item = (P::Item, Extra)> {
         // See if we need a refresh.
         let need_refresh = match &self.state {
             SchedState::Single { latest, .. } |
@@ -1242,11 +1349,14 @@ where
         }
     }
 
-    /// Get the best available item, or when we should retry.
+    /// Select the best available item, or when we should retry.
+    ///
+    /// This is *not* idempotent; it will update internal structures
+    /// and incur a slight penalty on the selected item.
     pub fn select(
         &mut self
     ) -> Result<
-        RetryIndefResult<(P::Item, Origin, DenseItemID<Epochs::Item>)>,
+        RetryIndefResult<(P::Item, Extra, DenseItemID<Epochs::Item>)>,
         SelectError
     > {
         match &mut self.state {
@@ -1346,12 +1456,12 @@ where
     }
 
     #[inline]
-    fn filter<I, Origin>(
+    fn filter<I, Extra>(
         &self,
         items: I
-    ) -> Vec<(Self::Item, Origin)>
+    ) -> Vec<(Self::Item, Extra)>
     where
-        I: Iterator<Item = (Self::Item, Origin)> {
+        I: Iterator<Item = (Self::Item, Extra)> {
         items.collect()
     }
 

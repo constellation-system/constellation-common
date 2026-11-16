@@ -101,7 +101,7 @@ pub enum X509VerifyFlag {
     NoCheckTime
 }
 
-/// Errors that can occur while loading a [PKITrustRoot].
+/// Errors that can occur while loading a [`PKITrustRoot`].
 #[derive(Debug)]
 pub enum PKITrustRootLoadError {
     #[cfg(feature = "openssl")]
@@ -111,9 +111,9 @@ pub enum PKITrustRootLoadError {
         error: ErrorStack
     },
     #[cfg(feature = "openssl")]
-    /// A bad [SystemTime] value was specified.
+    /// A bad [`SystemTime`] value was specified.
     BadTime {
-        /// The bad [SystemTime].
+        /// The bad [`SystemTime`].
         time: SystemTime
     },
     /// No root certificates were found.
@@ -305,6 +305,22 @@ impl PKITrustRoot {
     ///
     /// The arguments of this function correspond to similarly-named
     /// fields in the YAML format.  See documentation for details.
+    ///
+    /// # Parameters
+    ///
+    /// - `dirs`: Directories in which to search for certificates and CRLs.
+    ///
+    /// - `certs`: Direct paths to certificates.
+    ///
+    /// - `crls`: Direct paths to CRLs.
+    ///
+    /// - `verify_flags`: Certificate verification flags to use.
+    ///
+    /// - `host_flags`: Host flags to use.
+    ///
+    /// - `auth_lvl`: Level of certificate checking to use.
+    ///
+    /// - `verify_depth`: Maximum depth at which to verify signers.
     ///
     /// # Examples
     ///
@@ -688,28 +704,31 @@ impl PKITrustRoot {
     }
 
     #[cfg(feature = "openssl")]
-    /// Generate an OpenSSL [X509Store] from this configuration.
+    /// Generate an OpenSSL [`X509Store`] from this configuration.
     ///
-    /// This create a new [X509Store] and then use the configuration
+    /// This create a new [`X509Store`] and then use the configuration
     /// information in this object as arguments to its corresponding
     /// configuration functions.  The resulting object is then usable
     /// as a trust store.
     ///
-    /// The `verify_time` parameter optionally sets the time that will
-    /// be checked against certificate validity and expiry times.  The
-    /// `endpoint` parameter supplied an [IPEndpointAddr] used to check
-    /// certificates, if one exists.  The `purpose` parameter is a
-    /// [X509PurposeId] giving the trust store's role.
-    ///
-    /// Additionally, the [X509Store] will be configured in the
+    /// Additionally, the [`X509Store`] will be configured in the
     /// following ways:
     ///
     /// - The minimum protocol version will be set to TLS 1.3
     ///
+    /// # Parameters
+    ///
+    /// - `verify_time`: The time that will be checked against certificate
+    ///   validity and expiry times.
+    ///
+    /// - `endpoint`: An [`IPEndpointAddr`] used to check certificates.
+    ///
+    /// - `purpose`: An [`X509PurposeId`] giving the trust store's role.
+    ///
     /// # Examples
     ///
     /// The following example demonstrates loading a YAML
-    /// configuration, then using it to configure an [X509Store]:
+    /// configuration, then using it to configure an [`X509Store`]:
     ///
     /// ```
     /// # use constellation_common::config::pki::PKITrustRoot;
@@ -800,21 +819,23 @@ impl PKITrustRoot {
     }
 
     #[cfg(feature = "openssl")]
-    /// Generate an OpenSSL [X509Store] for SSL clients from this
+    /// Generate an OpenSSL [`X509Store`] for SSL clients from this
     /// configuration.
     ///
-    /// This create a new [X509Store] and then use the configuration
+    /// This create a new [`X509Store`] and then use the configuration
     /// information in this object as arguments to its corresponding
     /// configuration functions.  The resulting object is then usable
     /// as a trust store.
     ///
-    /// The `verify_time` parameter optionally sets the time that will
-    /// be checked against certificate validity and expiry times.
-    ///
-    /// Additionally, the [X509Store] will be configured in the
+    /// Additionally, the [`X509Store`] will be configured in the
     /// following ways:
     ///
     /// - The minimum protocol version will be set to TLS 1.3
+    ///
+    /// # Parameters
+    ///
+    /// - `verify_time`: The time that will be checked against certificate
+    ///   validity and expiry times.
     #[inline]
     pub fn load_server(
         &self,
@@ -824,23 +845,25 @@ impl PKITrustRoot {
     }
 
     #[cfg(feature = "openssl")]
-    /// Generate an OpenSSL [X509Store] for SSL servers from this
+    /// Generate an OpenSSL [`X509Store`] for SSL servers from this
     /// configuration.
     ///
-    /// This create a new [X509Store] and then use the configuration
+    /// This create a new [`X509Store`] and then use the configuration
     /// information in this object as arguments to its corresponding
     /// configuration functions.  The resulting object is then usable
     /// as a trust store.
     ///
-    /// The `verify_time` parameter optionally sets the time that will
-    /// be checked against certificate validity and expiry times.  The
-    /// `endpoint` parameter supplied an [IPEndpointAddr] used to check
-    /// certificates.
-    ///
-    /// Additionally, the [X509Store] will be configured in the
+    /// Additionally, the [`X509Store`] will be configured in the
     /// following ways:
     ///
     /// - The minimum protocol version will be set to TLS 1.3
+    ///
+    /// # Parameters
+    ///
+    /// - `verify_time`: The time that will be checked against certificate
+    ///   validity and expiry times.
+    ///
+    /// - `endpoint`: An [`IPEndpointAddr`] used to check certificates.
     #[inline]
     pub fn load_client(
         &self,
@@ -851,23 +874,25 @@ impl PKITrustRoot {
     }
 
     #[cfg(feature = "openssl")]
-    /// Generate an OpenSSL [X509Store] for SSL peers from this
+    /// Generate an OpenSSL [`X509Store`] for SSL peers from this
     /// configuration.
     ///
-    /// This create a new [X509Store] and then use the configuration
+    /// This create a new [`X509Store`] and then use the configuration
     /// information in this object as arguments to its corresponding
     /// configuration functions.  The resulting object is then usable
     /// as a trust store.
     ///
-    /// The `verify_time` parameter optionally sets the time that will
-    /// be checked against certificate validity and expiry times.  The
-    /// `endpoint` parameter supplied an [IPEndpointAddr] used to check
-    /// certificates.
-    ///
-    /// Additionally, the [X509Store] will be configured in the
+    /// Additionally, the [`X509Store`] will be configured in the
     /// following ways:
     ///
     /// - The minimum protocol version will be set to TLS 1.3
+    ///
+    /// # Parameters
+    ///
+    /// - `verify_time`: The time that will be checked against certificate
+    ///   validity and expiry times.
+    ///
+    /// - `endpoint`: An [`IPEndpointAddr`] used to check certificates.
     #[inline]
     pub fn load_peer(
         &self,

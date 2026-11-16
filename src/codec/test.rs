@@ -16,10 +16,15 @@
 // License along with this program.  If not, see
 // <https://www.gnu.org/licenses/>.
 
-//! Testing codec implementation.
+// XXX Get rid of this entire module and replate it with PER-formatted
+// basic types.
+
+//! Codec implementations for tests
 //!
-//! This module provides a [Decoder] and [Encoder] implementation
-//! suitable for testing purposes.
+//! This module provides [Decoder] and [Encoder] implementations and
+//! basic datatypes for testing purposes.
+//!
+//! *This module and its datatypes may be eliminated in the future*.
 
 use std::convert::Infallible;
 use std::fmt::Display;
@@ -52,22 +57,45 @@ pub struct TestStringCodec;
 #[derive(Clone, Default)]
 pub struct TestBytesCodec;
 
+/// Error indicating a buffer is too short for purpose.
 #[derive(Debug)]
 pub struct TooShort {
+    /// The expected size for the buffer.
     expected: usize,
+    /// The actual size of the buffer.
     actual: usize
 }
 
+/// Errors that can occur when decoding a datagram.
 #[derive(Debug)]
 pub enum TestDecodeError {
-    FromUTF8 { err: FromUtf8Error },
-    TooShort { expected: usize, actual: usize }
+    /// Error converting from UTF-8.
+    FromUTF8 {
+        /// The error that occurred converting from UTF-8.
+        err: FromUtf8Error
+    },
+    /// Buffer was too short.
+    TooShort {
+        /// The expected size for the buffer.
+        expected: usize,
+        /// The actual size of the buffer.
+        actual: usize
+    }
 }
 
+/// Errors that can occur when decoding from a stream.
 #[derive(Debug)]
 pub enum TestReadError {
-    IO { err: Error },
-    FromUTF8 { err: FromUtf8Error }
+    /// Low-level error while reading.
+    IO {
+        /// The I/O error that occurred.
+        err: Error
+    },
+    /// Error converting from UTF-8.
+    FromUTF8 {
+        /// The error that occurred converting from UTF-8.
+        err: FromUtf8Error
+    }
 }
 
 impl Create for TestStringCodec {

@@ -102,7 +102,7 @@ pub enum GSSAPISecurity {
 /// - `time_req`: The duration for which to request credentials.  If this is not
 ///   provided, credentials will be requested for as long as possible.
 ///
-/// - `security`: A [GSSAPISecurity] specification, giving the security level
+/// - `security`: A [`GSSAPISecurity`] specification, giving the security level
 ///   and whether or not it is required.
 ///
 /// ## Examples
@@ -257,13 +257,13 @@ impl ClientGSSAPIConfig {
     ///
     /// The components returned, in order are:
     ///
-    /// - The client principal name ([name](ClientGSSAPIConfig::name))
+    /// - The client principal name ([`name`](ClientGSSAPIConfig::name))
     /// - The expected service principal name
-    ///   ([service](ClientGSSAPIConfig::service))
+    ///   ([`service`](ClientGSSAPIConfig::service))
     /// - The duration for which to request credentials
-    ///   ([time_req](ClientGSSAPIConfig::time_req))
+    ///   ([`time_req`](ClientGSSAPIConfig::time_req))
     /// - The security level specification
-    ///   ([security](ClientGSSAPIConfig::security))
+    ///   ([`security`](ClientGSSAPIConfig::security))
     #[inline]
     pub fn take(
         self
@@ -386,9 +386,9 @@ impl ServerGSSAPIConfig {
     ///
     /// The components returned, in order are:
     ///
-    /// - The service principal name ([name](ServerGSSAPIConfig::name))
+    /// - The service principal name ([`name`](ServerGSSAPIConfig::name))
     /// - The duration for which to request credentials
-    ///   ([time_req](ServerGSSAPIConfig::time_req))
+    ///   ([`time_req`](ServerGSSAPIConfig::time_req))
     #[inline]
     pub fn take(self) -> (Option<String>, Option<Duration>) {
         (self.name, self.time_req)

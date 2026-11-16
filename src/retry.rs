@@ -18,11 +18,11 @@
 
 //! Retry backoff delay configuration and functionality.
 //!
-//! This module provides the [Retry] and [RetryResult] types.  [Retry]
+//! This module provides the [`Retry`] and [`RetryResult`] types.  [`Retry`]
 //! is a general, configurable implementation of a delay mechanism to
 //! be used for backoff delays with increasing intervals.
 //!
-//! [RetryResult] is a type similar to [Result], but intended to
+//! [`RetryResult`] is a type similar to [`Result`], but intended to
 //! indicate the need to retry an operation later, as opposed to an
 //! error.
 
@@ -267,6 +267,33 @@ impl Retry {
     ///
     /// The arguments of this function correspond to similarly-named
     /// fields in the YAML format.  See documentation for details.
+    ///
+    /// # Parameters
+    ///
+    /// - `factor`: A scaling factor, by which both the exponential and linear
+    ///   components are multiplied.
+    ///
+    /// - `exp_base`: The base of the exponent in the exponential component.
+    ///
+    /// - `exp_factor`: The factor by which the capped number of rounds is
+    ///   multiplied in the exponent.  (Note that the same effect can be
+    ///   achieved by raising `exp_base` to this power.)
+    ///
+    /// - `exp_rounds_cap`: The maximum number of rounds that will be used in
+    ///   computing the exponent.
+    ///
+    /// - `linear_factor`: A value by which the capped number of rounds is
+    ///   multiplied to compute the linear component.  (Note that the linear
+    ///   component is also multiplied by `factor`.)
+    ///
+    /// - `linear_rounds_cap`: The maximum number of rounds that will be used in
+    ///   computing the linear component.  Unlike the exponential component,
+    ///   this value is unbounded by default.
+    ///
+    /// - `max_random`: The maximum value for a randomly-distributed addend.
+    ///   The minimum is always `0`.
+    ///
+    /// - `addend`: A constant addend.
     ///
     /// # Examples
     ///

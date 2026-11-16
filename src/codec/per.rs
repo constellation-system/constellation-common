@@ -18,14 +18,60 @@
 
 //! Codec implementations using ASN.1 packed encoding rules (PER).
 //!
-//! This module provides a [DatagramCodec] implementation for any type
-//! implementhing the [Readable] and [Writable] traits from the
-//! [asn1rs] package.  This codec encodes and decodes the type using
+//! This module provides a [`DatagramCodec`] implementation for any type
+//! implementhing the [`Readable`] and [`Writable`] traits from the
+//! [`asn1rs`] package.  This codec encodes and decodes the type using
 //! the ASN.1 packed encoding rules.
 //!
 //! This codec is the preferred method for encoding data for
 //! transmission over far-link channels, and in general provides a
 //! very dense encoding format.
+//!
+//! # Rationale for ASN.1 PER
+//!
+//! ASN.1 may seem at first to be a somewhat archaic design choice,
+//! and PER may also seem unusual.  The following are factors that
+//! lead to this choice:
+//!
+//! - ASN.1 PER remains one of the densest encoding formats available, and
+//!   indeed it would be difficult to exceed its density without considerably
+//!   more effort per datatype (e.g. arithmetic enconding)
+//!
+//!   - Constellation's protocols *should* be designed to be dense, as some of
+//!     its operating environments involve significant bandwidth constraints.
+//!
+//!   - Constellation's protocols should also be highly entropic (meaning they
+//!     look similar to random noise), as this offers a degree of censorship and
+//!     cryptanalysis resistance.
+//!
+//! - Many message and data format standards (particularly those dealing with
+//!   cryptography) are defined using ASN.1.
+//!
+//!   - These data formats can be directly incorporated into Constellation's
+//!     protocols.  Technically the use of PER for these would be
+//!     standard-nonconforming, but that will not affect anything other than
+//!     Constellation.
+//!
+//! - Historically, ASN.1 developed a bad reputation for reasons that are no
+//!   longer valid:
+//!
+//!   - The standards were originally closed, and required expensive
+//!     subscriptions to obtain.  This has not been the case for some time.
+//!
+//!   - Development tools also were not available except at considerable cost,
+//!     and tended to be of low quality.  This is also no longer the case (the
+//!     [asn1rs] package, for example).
+//!
+//!   - Legacy parser implementations were prone to buffer overflow
+//!     vulnerabilities.
+//!
+//!   - Its datatype schema is somewhat archaic.  This comes down to the
+//!     presence of alternative string datatypes, and the lack of type
+//!     parameters.  The second is more significant, but can be worked around at
+//!     the application level.
+//!
+//!   - BER and its derivatives are fairly wasteful in terms of space (however,
+//!     web-based encodings are far worse).  However, Costellation uses PER.
 use std::convert::Infallible;
 use std::io::Read;
 use std::io::Write;
@@ -48,12 +94,22 @@ use crate::codec::Encoder;
 use crate::config::Create;
 use crate::error::CodecStreamError;
 
-/// Sub-trait of [DatagramCodec] for things that can be encoded using
+/// Sub-trait of [`DatagramCodec`] for things that can be encoded using
 /// the ASN.1 packed encoding rules (PER).
+///
+/// # Type Parameters
+///
+/// - `T`: The type represented in messages.
 pub trait DatagramPEREncoder<T>: DatagramCodec<T>
 where
     T: Readable + Writable {
-    /// Encode `val` into the [UperWriter].
+    /// Encode `val` into the [`UperWriter`].
+    ///
+    /// # Parameters
+    ///
+    /// - `val`: Value to be encoded.
+    ///
+    /// - `writer`: [`UperWriter`] to use to encode.
     #[inline]
     fn encode_to_writer(
         &mut self,
@@ -64,10 +120,20 @@ where
     }
 }
 
+/// Sub-trait of [`DatagramCodec`] for things that can be decoded using
+/// the ASN.1 packed encoding rules (PER).
+///
+/// # Type Parameters
+///
+/// - `T`: The type represented in messages.
 pub trait DatagramPERDecoder<T>: DatagramCodec<T>
 where
     T: Readable + Writable {
-    /// Decode a value of type `T` from the [UperReader].
+    /// Decode a value of type `T` from the [`UperReader`].
+    ///
+    /// # Parameters
+    ///
+    /// - `reader`: [`UperReader`] to use to decode.
     #[inline]
     fn decode_from_reader<B>(
         &mut self,
@@ -81,11 +147,24 @@ where
 
 /// Codec for encoding/decoding using ASN.1 packed encoding rules (PER).
 ///
-/// This type provides a [DatagramCodec] implementation for any type
-/// implementing the [Readable] and [Writable] traits from the
+/// This type provides a [`DatagramCodec`] implementation for any type
+/// implementing the [`Readable`] and [Writable] traits from the
 /// [asn1rs] packages.  This implementation encodes and decodes the
 /// type using the ASN.1 packed encoding rules, providing a very dense
 /// encoding format.
+///
+/// # Limitations
+///
+/// At present, it is required to specify the maximum size of the
+/// encoded message.  This is a limitation inherited from the [asn1rs]
+/// package, and should be removed from the Constellation APIs
+/// whenever it is eliminated in `asn1rs`.
+///
+/// # Type Parameters
+///
+/// - `T`: The type represented in messages.
+///
+/// - `MAX_BITS`: Maximum size of the encoded message in bits.
 pub struct PERCodec<T: Readable + Writable, const MAX_BITS: usize>(
     PhantomData<T>
 );

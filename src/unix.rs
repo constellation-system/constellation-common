@@ -19,8 +19,8 @@
 //! Utilities for Unix Sockets.
 //!
 //! This module contains utilities for Unix sockets.  This primarily
-//! consists of wrapper types to deal with the fact that [PathBuf] and
-//! [SocketAddr] don't have [Display] instances.
+//! consists of wrapper types to deal with the fact that [`PathBuf`] and
+//! [`SocketAddr`] don't have [`Display`] instances.
 
 use std::cmp::Ordering;
 use std::convert::TryFrom;
@@ -38,17 +38,17 @@ use serde::Serialize;
 
 use crate::net::PassthruDatagramXfrmParam;
 
-/// A wrapper around [SocketAddr]s for Unix sockets.
+/// A wrapper around [`SocketAddr`]s for Unix sockets.
 ///
 /// This is primarily to deal with the fact that `SocketAddr` does not
-/// have a [Display] instance.
+/// have a [`Display`] instance.
 #[derive(Clone, Debug)]
 pub struct UnixSocketAddr(SocketAddr);
 
-/// A wrapper around [PathBuf]s for Unix socket addresses.
+/// A wrapper around [`PathBuf`]s for Unix socket addresses.
 ///
 /// This is primarily to deal with the fact that `PathBuf` does not
-/// have a [Display] instance.
+/// have a [`Display`] instance.
 #[derive(
     Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
 )]

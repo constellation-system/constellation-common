@@ -56,14 +56,14 @@ pub trait HashID: Sized {
 
 /// Trait for specific cryptographic hash algorithms.
 pub trait HashAlgo {
-    /// Type of [HashID]s produced by this `HashAlgo`.
+    /// Type of [`HashID`]s produced by this `HashAlgo`.
     type HashID: HashID;
 
     /// Get the length of a hash in bytes.
     fn hash_len(&self) -> usize;
 
     /// Convert raw bytes representing a hash back into a
-    /// [HashID](HashAlgo::HashID).
+    /// [`HashID`](HashAlgo::HashID).
     ///
     /// This does *not* hash the bytes.
     ///
@@ -103,11 +103,11 @@ pub trait HashAlgo {
     ///
     /// - `T`: The type being encoded.
     ///
-    /// - `C`: The type of [Encoder] to use to encode `T`.
+    /// - `C`: The type of [`Encoder`] to use to encode `T`.
     ///
     /// # Parameters
     ///
-    /// - `codec`: The [Encoder] to use to produce the byte representation.
+    /// - `codec`: The [`Encoder`] to use to produce the byte representation.
     ///
     /// - `val`: The value to encode.
     fn hashid<T, C>(
@@ -123,67 +123,67 @@ pub trait HashAlgo {
     }
 }
 
-/// [HashAlgo] using the Blake2b algorithm.
+/// [`HashAlgo`] using the Blake2b algorithm.
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Blake2bAlgo;
 
-/// [HashID] using the Blake2b algorithm.
+/// [`HashID`] using the Blake2b algorithm.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Blake2bID {
     id: [u8; Self::HASH_LEN]
 }
 
-/// [HashAlgo] using the RipeMD-160 algorithm.
+/// [`HashAlgo`] using the RipeMD-160 algorithm.
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct RipeMD160Algo;
 
-/// [HashID] using the RipeMD-160 algorithm.
+/// [`HashID`] using the RipeMD-160 algorithm.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct RipeMD160ID {
     id: [u8; Self::HASH_LEN]
 }
 
-/// [HashAlgo] using the SHA3-512 algorithm.
+/// [`HashAlgo`] using the SHA3 (Keccak) algorithm.
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SHA3Algo;
 
-/// [HashID] using the SHA3-512 algorithm.
+/// [`HashID`] using the SHA3-512 algorithm.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SHA3ID {
     id: [u8; Self::HASH_LEN]
 }
 
-/// [HashAlgo] using the SHA384 (SHA2-384) algorithm.
+/// [`HashAlgo`] using the SHA384 (SHA2-384) algorithm.
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SHA384Algo;
 
-/// [HashID] using the SHA384 (SHA2-384) algorithm.
+/// [`HashID`] using the SHA384 (SHA2-384) algorithm.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SHA384ID {
     id: [u8; Self::HASH_LEN]
 }
 
-/// [HashAlgo] using the Skein algorithm.
+/// [`HashAlgo`] using the Skein algorithm.
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SkeinAlgo;
 
-/// [HashID] using the Skein algorithm.
+/// [`HashID`] using the Skein algorithm.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SkeinID {
     id: [u8; Self::HASH_LEN]
 }
 
-/// [HashAlgo] using the Whirlpool algorithm.
+/// [`HashAlgo`] using the Whirlpool algorithm.
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct WhirlpoolAlgo;
 
-/// [HashID] using the Whirlpool algorithm.
+/// [`HashID`] using the Whirlpool algorithm.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct WhirlpoolID {
     id: [u8; Self::HASH_LEN]
 }
 
-/// [HashAlgo] instance capable of using a dynamically-configured hash
+/// [`HashAlgo`] instance capable of using a dynamically-configured hash
 /// function.
 ///
 /// This also can serve as a configuration object, and can be deserialized.
@@ -202,7 +202,7 @@ pub enum CompoundHashAlgo {
     Whirlpool { whirlpool: WhirlpoolAlgo }
 }
 
-/// [HashID] instance representing an ID generated from a
+/// [`HashID`] instance representing an ID generated from a
 /// dynamically-configured hash algorithm.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum CompoundHashID {

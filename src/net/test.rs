@@ -27,12 +27,12 @@ use crate::error::ScopedError;
 use crate::net::PrivateMsgs;
 use crate::net::SharedMsgs;
 
-/// Scriptable [PrivateMsgs] instance for testing.
+/// Scriptable [`PrivateMsgs`] instance for testing.
 pub struct TestPrivateMsgs<Msg> {
     script: Vec<Result<(Option<Vec<Msg>>, Option<Instant>), TestMsgsError>>
 }
 
-/// Scriptable [SharedMsgs] instance for testing.
+/// Scriptable [`SharedMsgs`] instance for testing.
 pub struct TestSharedMsgs<Party, Msg>
 where
     Party: Clone + Eq + Hash {
@@ -44,7 +44,7 @@ where
     >
 }
 
-/// Test error for use with [TestPrivateMsgs] and [TestSharedMsgs].
+/// Test error for use with [`TestPrivateMsgs`] and [`TestSharedMsgs`].
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct TestMsgsError {
     pub scope: ErrorScope
@@ -54,12 +54,12 @@ impl<Msg> TestPrivateMsgs<Msg> {
     /// Create a `TestPrivateMsgs` from a script.
     ///
     /// Each entry in `script` determines the outcome of one call of
-    /// [msgs](PrivateMsgs::msgs).  This will panic if `msgs` is
+    /// [`msgs`](PrivateMsgs::msgs).  This will panic if `msgs` is
     /// called when the script is exhausted.
     ///
     /// # Parameters
     ///
-    /// - `script`: The action script for calls to [msgs](PrivateMsgs::msgs).
+    /// - `script`: The action script for calls to [`msgs`](PrivateMsgs::msgs).
     pub fn new(
         mut script: Vec<
             Result<(Option<Vec<Msg>>, Option<Instant>), TestMsgsError>
@@ -78,12 +78,12 @@ where
     /// Create a `TestSharedMsgs` from a script.
     ///
     /// Each entry in `script` determines the outcome of one call of
-    /// [msgs](SharedMsgs::msgs).  This will panic if `msgs` is
+    /// [`msgs`](SharedMsgs::msgs).  This will panic if `msgs` is
     /// called when the script is exhausted.
     ///
     /// # Parameters
     ///
-    /// - `script`: The action script for calls to [msgs](SharedMsgs::msgs).
+    /// - `script`: The action script for calls to [`msgs`](SharedMsgs::msgs).
     pub fn new(
         mut script: Vec<
             Result<

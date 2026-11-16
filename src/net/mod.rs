@@ -58,8 +58,8 @@ pub mod test;
 
 /// Trait for sessions with an individual peer address.
 ///
-/// Implementors of this trait are also expected to implement [Read]
-/// and [Write].
+/// Implementors of this trait are also expected to implement [`Read`]
+/// and [`Write`].
 pub trait Session {
     /// The type of local addresses.
     type LocalAddr: Display;
@@ -107,10 +107,26 @@ pub trait Negotiator<Outcome> {
     ) -> Result<NegotiatorResult<Outcome, Self::Pending>, Self::NegotiateError>;
 }
 
+/// Trait for starting negotiations.
+///
+/// This permits a `Negotiator` to start negotiations.
+///
+/// - `Outcome`: The type of negotiation outcomes.
+///
+/// - `Stream`: The type of streams to use for negotiations.
 pub trait NegotiatorStart<Outcome, Stream>: Negotiator<Outcome> {
+    /// Type of parameters for starting negotiations.
     type Param;
+    /// Type of errors that can occur starting negotations.
     type StartError: Debug + Display + ScopedError;
 
+    /// Start a negotation.
+    ///
+    /// # Parameters
+    ///
+    /// - `param`: Parameter for starting negotiations.
+    ///
+    /// - `stream`: The stream to use for communications.
     fn start(
         &self,
         param: &Self::Param,
@@ -119,6 +135,13 @@ pub trait NegotiatorStart<Outcome, Stream>: Negotiator<Outcome> {
 }
 
 /// Trait for sources of messages to be sent over a private channel.
+///
+/// This acts as one end of a mailbox-type structure, which is polled
+/// by senders to get messages to send.
+///
+/// # Type Parameters
+///
+/// - `Msg`: Type of messages.
 pub trait PrivateMsgs<Msg> {
     /// Type of errors that can occur when collecting messages.
     type MsgsError: Debug + Display + ScopedError;
@@ -130,7 +153,7 @@ pub trait PrivateMsgs<Msg> {
     ///
     /// # Parameters
     ///
-    /// - `now`: The current time; can be obtained using [now](Instant::now).
+    /// - `now`: The current time; can be obtained using [`now`](Instant::now).
     fn msgs(
         &mut self,
         now: Instant
@@ -138,6 +161,15 @@ pub trait PrivateMsgs<Msg> {
 }
 
 /// Trait for sources of messages to be sent over a shared channel.
+///
+/// This acts as one end of a mailbox-type structure, which is polled
+/// by senders to get messages to send.
+///
+/// # Type Parameters
+///
+/// - `Party`: Type of parties.
+///
+/// - `Msg`: Type of messages.
 pub trait SharedMsgs<Party, Msg> {
     /// Type of errors that can occur when collecting messages.
     type MsgsError: Debug + Display + ScopedError;
@@ -149,10 +181,12 @@ pub trait SharedMsgs<Party, Msg> {
     ///
     /// # Parameters
     ///
-    /// - `now`: The current time; can be obtained using [now](Instant::now).
+    /// - `parties`: The subset of parties for which to get messages.
+    ///
+    /// - `now`: The current time; can be obtained using [`now`](Instant::now).
     fn msgs(
         &mut self,
-        live: &HashSet<Party>,
+        parties: &HashSet<Party>,
         now: Instant
     ) -> Result<
         (Option<Vec<(Vec<Party>, Vec<Msg>)>>, Option<Instant>),
@@ -166,6 +200,7 @@ pub trait SharedMsgs<Party, Msg> {
 /// like low-level sockets, which will typically be thin wrappers
 /// around Unix datagram or UDP sockets.
 pub trait Socket: Send + Sync {
+    /// Type of addresses.
     type Addr: Clone + Debug + Display + Eq;
 
     /// Get the local socket address.
@@ -186,9 +221,9 @@ pub trait Socket: Send + Sync {
     }
 }
 
-/// Subtrait of [Socket] for sockets capable of sending.
+/// Subtrait of [`Socket`] for sockets capable of sending.
 ///
-/// This is separate from [Receiver], to allow implementations to
+/// This is separate from [`Receiver`], to allow implementations to
 /// spilt into a send and receive half.
 pub trait Sender: Socket {
     /// Get maximum transmission unit (MTU) for the socket, if it exists.
@@ -239,9 +274,9 @@ pub trait Sender: Socket {
     fn flush(&self) -> Result<(), Error>;
 }
 
-/// Subtrait of [Socket] for sockets capable of receiving.
+/// Subtrait of [`Socket`] for sockets capable of receiving.
 ///
-/// This is separate from [Sender], to allow implementations to
+/// This is separate from [`Sender`], to allow implementations to
 /// spilt into a send and receive half.
 pub trait Receiver: Socket {
     type MsgCred;
@@ -256,7 +291,7 @@ pub trait Receiver: Socket {
     /// The counterparty address is generally able to be spoofed and
     /// cannot establish identity, unless the underlying socket
     /// implementation guarantees it.  See
-    /// [allow_session_addr_creds](Socket::allow_session_addr_creds).
+    /// [`allow_session_addr_creds`](Socket::allow_session_addr_creds).
     ///
     /// # Parameters
     ///
@@ -276,7 +311,7 @@ pub trait Receiver: Socket {
     /// The counterparty address is generally able to be spoofed and
     /// cannot establish identity, unless the underlying socket
     /// implementation guarantees it.  See
-    /// [allow_session_addr_creds](Socket::allow_session_addr_creds).
+    /// [`allow_session_addr_creds`](Socket::allow_session_addr_creds).
     ///
     /// # Parameters
     ///
@@ -318,12 +353,25 @@ pub trait DatagramXfrm {
 
     /// Allocate a buffer for the wrapped message, if one is needed.
     ///
-    /// If the wrapped message size is larger than the text, this will
+    /// If the wrapped message size is larger than `buf`, this will
     /// return a `Vec` with enough space to contain the wrapped
     /// message.  Otherwise, `None` will be returned.
     ///
     /// This is intended to allocate buffers for reading in results
     /// from the socket, prior to unwrapping the message.
+    ///
+    /// # Parameters
+    ///
+    /// - `buf`: The existing message.
+    ///
+    /// - `addr`: The peer address.
+    ///
+    /// - `mtu`: The MTU for the message, if one exists.
+    ///
+    /// # Return Value
+    ///
+    /// - `Some(buf)` if the message needs a bigger buffer.
+    /// - `None` if the message can be wrapped in place.
     #[inline]
     fn msg_buf(
         &self,
@@ -350,6 +398,17 @@ pub trait DatagramXfrm {
     /// This will wrap the message in `buf`, returning `None` if no
     /// change is made to the message, and `Some` if a new message has
     /// been generated.
+    ///
+    /// # Parameters
+    ///
+    /// - `msg`: The message to wrap.
+    ///
+    /// - `addr`: The
+    ///
+    /// # Return Value
+    ///
+    /// - `Some(buf)` if the message needed a bigger buffer.
+    /// - `None` if the message was wrapped in place.
     fn wrap(
         &mut self,
         msg: &[u8],
@@ -363,6 +422,10 @@ pub trait DatagramXfrm {
     /// - `buf`: Buffer containing the encoded message.
     ///
     /// - `addr`: The address from which this was receieved.
+    ///
+    /// # Return Value
+    ///
+    /// The number of bytes written into `buf`, and the peer address.
     fn unwrap(
         &mut self,
         buf: &mut [u8],
@@ -370,7 +433,9 @@ pub trait DatagramXfrm {
     ) -> Result<(usize, Self::PeerAddr), Self::Error>;
 }
 
-/// Trait for [DatagramXfrm] instances that can be created from
+// XXX replace this with CreateWithParam.
+
+/// Trait for [`DatagramXfrm`] instances that can be created from
 /// whole cloth, from a configuration object.
 pub trait DatagramXfrmCreate: DatagramXfrm {
     /// Type of parameters used to create this type of context.
@@ -379,13 +444,19 @@ pub trait DatagramXfrmCreate: DatagramXfrm {
     type Addr;
 
     /// Create a context from `param`.
+    ///
+    /// # Parameters
+    ///
+    /// - `addr`: The peer address.
+    ///
+    /// - `param`: The create parameter.
     fn create(
         addr: &Self::Addr,
         param: &Self::CreateParam
     ) -> Self;
 }
 
-/// Trait for recovering parameters from a [DatagramXfrm] and a socket.
+/// Trait for recovering parameters from a [`DatagramXfrm`] and a socket.
 pub trait DatagramXfrmCreateParam: DatagramXfrm {
     /// Type of sockets from which to obtain parameters.
     type Socket;
@@ -394,15 +465,19 @@ pub trait DatagramXfrmCreateParam: DatagramXfrm {
     /// Errors that can occur recovering parameters.
     type ParamError: Debug + Display + ScopedError;
 
-    /// Recover the [DatagramXfrm] creation parameters from this
+    /// Recover the [`DatagramXfrm`] creation parameters from this
     /// instance together with a socket.
+    ///
+    /// # Parameters
+    ///
+    /// - `socket`: The socket from which to get creation parameters.
     fn param(
         &self,
         socket: &Self::Socket
     ) -> Result<Self::Param, Self::ParamError>;
 }
 
-/// Result from a [Negotiator].
+/// Result from a [`Negotiator`].
 pub enum NegotiatorResult<Complete, Pending> {
     /// Negotiations are complete.
     Complete(Complete),
@@ -410,11 +485,11 @@ pub enum NegotiatorResult<Complete, Pending> {
     Pending(Pending)
 }
 
-/// This is a [DatagramXfrm] that does no transformation on the
+/// This is a [`DatagramXfrm`] that does no transformation on the
 /// messages.
 ///
 /// This is typically used as the "bottom level" in a nested
-/// construction of [DatagramXfrm]s.
+/// construction of [`DatagramXfrm`]s.
 pub struct PassthruDatagramXfrm<Addr>(PhantomData<Addr>);
 
 /// An endpoint for an IP connection.
@@ -425,7 +500,7 @@ pub struct PassthruDatagramXfrm<Addr>(PhantomData<Addr>);
 /// # YAML Format
 ///
 /// The YAML format is always a string.  If it is parseable as an IP
-/// address, then the result will be converted to an [IpAddr] and
+/// address, then the result will be converted to an [`IpAddr`] and
 /// interpreted as such.  Otherwise, the result will be interpreted as
 /// a name, which will ultimately be resolved.
 #[derive(
@@ -450,9 +525,9 @@ pub enum IPEndpointAddr {
 
 /// IP socket configuration.
 ///
-/// This consists of an [IPEndpointAddr] together with a port number.
+/// This consists of an [`IPEndpointAddr`] together with a port number.
 /// This is used to incorporate resolvable names into a
-/// [SocketAddr]-like type, thus allowing name resolution to be
+/// [`SocketAddr`]-like type, thus allowing name resolution to be
 /// handled in a more robust manner.  This is a configuration object,
 /// and can be parsed from YAML.
 ///
@@ -480,7 +555,7 @@ pub struct IPEndpoint {
     port: u16
 }
 
-/// Creation parameter for [PassthruDatagramXfrm].
+/// Creation parameter for [`PassthruDatagramXfrm`].
 ///
 /// This contains no information.
 #[derive(
@@ -497,18 +572,24 @@ pub struct IPEndpoint {
 )]
 pub struct PassthruDatagramXfrmParam;
 
+/// A simple [`Negotiator`] that immediately returns a fixed result.
 #[derive(Clone, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PassthruNegotiator;
 
+/// A simple [`Negotiator`] that immediately returns `()`.
 pub struct TrivialNegotiator;
 
+/// The ongoing negotiation state for [`PassthruNegotiator`].
 pub struct PassthruSessionNegotiation<Outcome> {
     outcome: Outcome
 }
 
+/// Errors that can occur converting an [`IPEndpointAddr`] to an
+/// [`IpAddr`].
 #[derive(Debug)]
 pub struct IPEndpointAddrToIPAddrErr(IPEndpointAddr);
 
+/// Errors that can occur parsing an [`IPEndpoint`] from a string.
 #[derive(Debug)]
 pub struct BadIPEndpoint(String);
 
@@ -912,7 +993,7 @@ impl IPEndpoint {
         (self.addr, self.port)
     }
 
-    /// Get the [IPEndpointAddr] component.
+    /// Get the [`IPEndpointAddr`] component.
     #[inline]
     pub fn ip_addr(&self) -> &IPEndpointAddr {
         &self.addr

@@ -17,6 +17,12 @@
 // <https://www.gnu.org/licenses/>.
 
 //! Shutdown flags for multithreaded operation.
+//!
+//! This module provides [`ShutdownFlag`], which is a mechanism for
+//! signaling threads to shut down.  A [`ShutdownFlag`] can register
+//! one or more [`Notify`]s, permitting [`mio`] threads to receive
+//! notification when the flag is set.
+
 use std::io::Error;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -53,6 +59,10 @@ impl ShutdownFlag {
     }
 
     /// Create a new shutdown flag.
+    ///
+    /// # Parameters
+    ///
+    /// - `size`: Expected number of [`Notify`]s that will be registered.
     #[inline]
     pub fn with_capacity(size: usize) -> ShutdownFlag {
         ShutdownFlag {
@@ -73,7 +83,12 @@ impl ShutdownFlag {
         self.flag.load(Ordering::Acquire)
     }
 
-    /// Register a new [Waker].
+    /// Register a new [`Notify`].
+    ///
+    /// # Parameters
+    ///
+    /// - `notify`: [`Notify`] to register.  This will be triggered when the
+    ///   flag is set.
     #[inline]
     pub fn add_notify(
         &mut self,
@@ -86,7 +101,9 @@ impl ShutdownFlag {
 
     /// Set the shutdown status on this flag.
     ///
-    /// Once set, it cannot be unset.
+    /// Set the shutdown flag, indicating shutdow.  This will also
+    /// trigger all registered [`Notify`]s.  Once set, it cannot be
+    /// unset.
     #[inline]
     pub fn set(&mut self) -> Result<(), WithMutexPoison<Error>> {
         self.flag.store(true, Ordering::Release);

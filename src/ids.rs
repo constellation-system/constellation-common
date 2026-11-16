@@ -18,8 +18,8 @@
 
 //! ID generator streams.
 //!
-//! This module contains various implementation of [Iterator] that can
-//! be used to generate streams of IDs.  [AscendingCount] represents
+//! This module contains various implementation of [`Iterator`] that can
+//! be used to generate streams of IDs.  [`AscendingCount`] represents
 //! the simplest of these, and is a simple ascending counter.  Other
 //! provide a cryptographically-secure random number stream.
 
@@ -32,7 +32,7 @@ use crate::config::Create;
 
 /// Ascending count ID stream.
 ///
-/// This generates a stream of objects obtained from the [From]
+/// This generates a stream of objects obtained from the [`From`]
 /// instance of a monotonically-ascending count of `u128`s.
 #[derive(Clone)]
 pub struct AscendingCount<T>
@@ -42,6 +42,7 @@ where
     curr: u128
 }
 
+// XXX get rid of this
 pub struct SharedIDGen<Inner>
 where
     Inner: Iterator,

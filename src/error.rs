@@ -17,6 +17,13 @@
 // <https://www.gnu.org/licenses/>.
 
 //! Common functionality for errors and error-handling.
+//!
+//! This module provides some common error types for
+//! frequently-encountered cases.  It also provides the
+//! [`RecoverableError`] trait, which represents errors that may be
+//! permanent, or may be able to be recovered.  Finally, it provides
+//! the [`ScopedError`] trait, which represents errors that have a
+//! well-defined scope (see [`ErrorScope`]).
 use std::cmp::Ordering;
 use std::convert::Infallible;
 use std::fmt::Debug;
@@ -37,10 +44,10 @@ use openssl::ssl::MidHandshakeSslStream;
 /// Type for errors that may or may not represent recoverable
 /// conditions.
 ///
-/// A prime example of this is [std::io::Error], which includes a
+/// A prime example of this is [`std::io::Error`], which includes a
 /// number of non-recoverable conditions, but also includes
-/// [Interrupted](ErrorKind::Interrupted) and
-/// [WouldBlock](ErrorKind::WouldBlock).
+/// [`Interrupted`](ErrorKind::Interrupted) and
+/// [`WouldBlock`](ErrorKind::WouldBlock).
 ///
 /// This trait represents the splitting portion of this process.
 pub trait RecoverableError: Sized {
@@ -64,56 +71,56 @@ pub trait ScopedError {
     fn scope(&self) -> ErrorScope;
 
     /// Whether or not the error has the
-    /// [Shutdown](ErrorScope::Shutdown) scope.
+    /// [`Shutdown`](ErrorScope::Shutdown) scope.
     #[inline]
     fn is_shutdown(&self) -> bool {
         self.scope() == ErrorScope::Shutdown
     }
 
     /// Whether or not the error has the
-    /// [Unrecoverable](ErrorScope::Unrecoverable) scope.
+    /// [`Unrecoverable`](ErrorScope::Unrecoverable) scope.
     #[inline]
     fn is_unrecoverable(&self) -> bool {
         self.scope() == ErrorScope::Unrecoverable
     }
 
     /// Whether or not the error has the
-    /// [System](ErrorScope::System) scope.
+    /// [`System`](ErrorScope::System) scope.
     #[inline]
     fn is_system(&self) -> bool {
         self.scope() == ErrorScope::System
     }
 
     /// Whether or not the error has the
-    /// [Session](ErrorScope::Session) scope.
+    /// [`Session`](ErrorScope::Session) scope.
     #[inline]
     fn is_session(&self) -> bool {
         self.scope() == ErrorScope::Session
     }
 
     /// Whether or not the error has the
-    /// [Batch](ErrorScope::Batch) scope.
+    /// [`Batch`](ErrorScope::Batch) scope.
     #[inline]
     fn is_batch(&self) -> bool {
         self.scope() == ErrorScope::Batch
     }
 
     /// Whether or not the error has the
-    /// [Msg](ErrorScope::Msg) scope.
+    /// [`Msg`](ErrorScope::Msg) scope.
     #[inline]
     fn is_msg(&self) -> bool {
         self.scope() == ErrorScope::Msg
     }
 
     /// Whether or not the error has the
-    /// [External](ErrorScope::External) scope.
+    /// [`External`](ErrorScope::External) scope.
     #[inline]
     fn is_external(&self) -> bool {
         self.scope() == ErrorScope::External
     }
 
     /// Whether or not the error has the
-    /// [Retryable](ErrorScope::Retryable) scope.
+    /// [`Retryable`](ErrorScope::Retryable) scope.
     #[inline]
     fn is_retryable(&self) -> bool {
         self.scope() == ErrorScope::Retryable
@@ -165,17 +172,21 @@ pub enum ErrorScope {
     /// The error is temporary in nature, and the operation can be retried.
     ///
     /// This is associated with errors such as
-    /// [TimedOut](ErrorKind::TimedOut), and
-    /// [Interrupted](ErrorKind::Interrupted).  These should generally
+    /// [`TimedOut`](ErrorKind::TimedOut), and
+    /// [`Interrupted`](ErrorKind::Interrupted).  These should generally
     /// not be reported, except as debug messages.
     Retryable,
     /// The error denotes end of input in a nonblocking I/O setting.
     ///
-    /// This is associated with [WouldBlock](ErrorKind::WouldBlock).
+    /// This is associated with [`WouldBlock`](ErrorKind::WouldBlock).
     /// This should generally not be reported.
     WouldBlock
 }
 
+/// Representation of an IO error that can be completed (see
+/// [`RecoverableError`]).
+///
+/// This corresponds to `WouldBlock`.
 #[derive(Debug)]
 pub struct CompletableIOError;
 

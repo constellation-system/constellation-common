@@ -21,12 +21,11 @@
 //! This module contains types for representing versions and ranges of
 //! versions.  The primary types of interest are:
 //!
-//! - [`Version`]: Representation of a simple numerical version of the
-//!   form `major.minor.subminor`.  This is suitable for most
-//!   programmatic uses.
+//! - [`Version`]: Representation of a simple numerical version of the form
+//!   `major.minor.subminor`.  This is suitable for most programmatic uses.
 //!
-//! - [`FullVersion`]: Representation of a version with additional
-//!   annotations, such as release candidacy.
+//! - [`FullVersion`]: Representation of a version with additional annotations,
+//!   such as release candidacy.
 //!
 //! - [`VersionRange`]: Representation of a range of `Version`s, with
 //!   version-matching capability.
@@ -44,7 +43,6 @@ use std::fmt::Formatter;
 use std::string::ToString;
 
 use crate::codec::per::PERCodec;
-
 /// Representation of a simple version consisting of a
 /// `major.minor.subminor` triple.
 ///
@@ -54,16 +52,15 @@ use crate::codec::per::PERCodec;
 /// three numerical components:
 ///
 /// - **Major**: Represents significant or breaking changes without
-///   expectation of back-compatibility, generally requiring
-///   significant effort to update dependencies.
+///   expectation of back-compatibility, generally requiring significant
+///   effort to update dependencies.
 ///
-/// - **Minor**: Represents new features, significant changes in
-///   behavior, and structural fixes that maintain backward
-///   compatibility.
+/// - **Minor**: Represents new features, significant changes in behavior,
+///   and structural fixes that maintain backward compatibility.
 ///
 /// - **Sub-minor**: Also called "patch".  Represents minor fixes,
-///   performance improvements, and other changes that should maintain
-///   both API and beharioral compatibility.
+///   performance improvements, and other changes that should maintain both
+///   API and beharioral compatibility.
 ///
 /// # Limitations
 ///
@@ -79,13 +76,12 @@ use crate::codec::per::PERCodec;
 /// A `Version` has two representations from which it can be created:
 ///
 /// - [`VersionConfig`](crate::config::VersionConfig): `Version` has
-///   [`From`] and [`Into`] instances with `VersionConfig`.  The latter
-///   can be parsed from a string, permitting easy use in a configuration
-///   file.
+///   [`From`] and [`Into`] instances with `VersionConfig`.  The latter can
+///   be parsed from a string, permitting easy use in a configuration file.
 ///
-/// - [`VersionPERCodec`]: A [`PERCodec`] instance, `VersionPERCodec`
-///   can be used to serialize and deserialize a `Version` as a dense
-///   binary format, suitable for storage and network communications.
+/// - [`VersionPERCodec`]: A [`PERCodec`] instance, `VersionPERCodec` can
+///   be used to serialize and deserialize a `Version` as a dense binary
+///   format, suitable for storage and network communications.
 ///
 /// ## ASN.1 Representation
 ///
@@ -99,7 +95,6 @@ use crate::codec::per::PERCodec;
 /// }
 /// ```
 pub use crate::generated::version::Version;
-
 /// Representation of a range of [`Version`]s.
 ///
 /// This type describes a range of `Version`s and provides
@@ -126,7 +121,6 @@ pub use crate::generated::version::Version;
 ///
 /// See [`VersionRangeElem`] for its ASN.1 representation.
 pub use crate::generated::version::VersionRange;
-
 /// Representation of a [`VersionRange`] element, which serves as
 /// one of the two endpoints to the range.
 ///
@@ -145,7 +139,6 @@ pub use crate::generated::version::VersionRange;
 /// See [`VersionRangeElemMajor`], [`VersionRangeElemMinor`], and
 /// [`VersionRangeElemSub`] for their ASN.1 representations.
 pub use crate::generated::version::VersionRangeElem;
-
 /// Representation of a [`VersionRangeElem`] element that matches only
 /// the major number.
 ///
@@ -159,7 +152,6 @@ pub use crate::generated::version::VersionRangeElem;
 /// }
 /// ```
 pub use crate::generated::version::VersionRangeElemMajor;
-
 /// Representation of a [`VersionRangeElem`] element that matches the
 /// major and minor numbers.
 ///
@@ -174,7 +166,6 @@ pub use crate::generated::version::VersionRangeElemMajor;
 /// }
 /// ```
 pub use crate::generated::version::VersionRangeElemMinor;
-
 /// Representation of a [`VersionRangeElem`] element that matches all of
 /// the major, minor and sub-minor numbers.
 ///
@@ -239,14 +230,13 @@ pub enum VersionSuffix {
 ///
 /// A `FullVersion` consists of the following information:
 ///
-/// - **Prefix**: An informational string, often used to denote
-///   special build parameters, certifications, or constraints.  This
-///   is optional.
+/// - **Prefix**: An informational string, often used to denote special build
+///   parameters, certifications, or constraints.  This is optional.
 ///
 /// - **Version Number**: A [`Version`], representing the core version.
 ///
-/// - **Suffix**: A [`VersionSuffix`], denoting the stage in the
-///   development cycle  This is optional.
+/// - **Suffix**: A [`VersionSuffix`], denoting the stage in the development
+///   cycle  This is optional.
 pub struct FullVersion {
     /// Informational prefix, added to indicate special status or options.
     ///
@@ -275,14 +265,14 @@ impl FullVersion {
     ///
     /// # Parameters
     ///
-    /// - `prefix`: The version prefix, or `None`.  This is an
-    ///   informational string, often used to denote special build
-    ///   parameters, certifications, or constraints.
+    /// - `prefix`: The version prefix, or `None`.  This is an informational
+    ///   string, often used to denote special build parameters, certifications,
+    ///   or constraints.
     ///
     /// - `version`: The version number.  This represents the core version.
     ///
-    /// - `suffix`: The version suffix, or `None`.  This denotes the
-    ///   stage in the development cycle.
+    /// - `suffix`: The version suffix, or `None`.  This denotes the stage in
+    ///   the development cycle.
     #[inline]
     pub const fn new(
         prefix: Option<&'static str>,
@@ -325,17 +315,17 @@ impl Version {
     ///
     /// # Parameters
     ///
-    /// - `major`: Major version number.  This represents significant
-    ///   or breaking changes without expectation of back-compatibility,
-    ///   generally requiring significant effort to update dependencies.
+    /// - `major`: Major version number.  This represents significant or
+    ///   breaking changes without expectation of back-compatibility, generally
+    ///   requiring significant effort to update dependencies.
     ///
-    /// - `minor`: Minor version number.  This represents new
-    ///   features, significant changes in behavior, and structural
-    ///   fixes that maintain backward compatibility.
+    /// - `minor`: Minor version number.  This represents new features,
+    ///   significant changes in behavior, and structural fixes that maintain
+    ///   backward compatibility.
     ///
-    /// - `sub`: Sub-minor version number.  This represents minor
-    ///   fixes, performance improvements, and other changes that should
-    ///   maintain both API and beharioral compatibility.
+    /// - `sub`: Sub-minor version number.  This represents minor fixes,
+    ///   performance improvements, and other changes that should maintain both
+    ///   API and beharioral compatibility.
     #[inline]
     pub const fn new(
         major: u16,

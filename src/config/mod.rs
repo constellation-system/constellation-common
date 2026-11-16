@@ -41,23 +41,67 @@ use crate::version::BadVersionString;
 use crate::version::Version;
 use crate::version::VersionRange;
 
+/// Trait for types that can be created from a configuration.
+///
+/// This is used to permit types to be created from configuration
+/// objects, which can typically be parsed from YAML (or other
+/// formats) using [`serde`].  This permits a separation of concerns
+/// between what is operationally useful and what serves as a good
+/// format for configuration files.
 pub trait Create: Sized {
-    type CreateError: Debug + Display;
+    /// Type of configuration objects from which the type is created.
     type Config;
+    /// Errors that can occur creating the type.
+    type CreateError: Debug + Display;
 
+    /// Create an instance from a configuration object.
+    ///
+    /// # Parameters
+    ///
+    /// - `config`: The configuration object from which to create the instance.
     fn create(config: Self::Config) -> Result<Self, Self::CreateError>;
 }
 
+/// Trait for types that can be created from a configuration and a
+/// parameter.
+///
+/// This trait serves a similar purpose to [`Create`], but permits the
+/// [`create`](CreateWithParam::create) function to take an additional
+/// parameter.
+///
+/// # Type Parameters
+///
+/// - `Param`: Type of parameters to [`create`](CreateWithParam::create).
 pub trait CreateWithParam<Param>: Sized {
-    type CreateError: Debug + Display;
+    /// Type of configuration objects from which the type is created.
     type Config;
+    /// Errors that can occur creating the type.
+    type CreateError: Debug + Display;
 
+    /// Create an instance from a configuration object.
+    ///
+    /// # Parameters
+    ///
+    /// - `config`: The configuration object from which to create the instance.
+    ///
+    /// - `param`: The additional parameter.
     fn create(
         config: Self::Config,
         param: Param
     ) -> Result<Self, Self::CreateError>;
 }
 
+/// Configuration object for [`Version`]s.
+///
+/// This is not a compound type; its serialized format is a string,
+/// which is the same format parsed by `Version`'s [`TryFrom`]
+/// instance for `&str`.
+///
+/// # Format
+///
+/// The serialized string has the format `major.minor.subminor`,
+/// where `major`, `minor`, and `subminor` are natural numbers
+/// denoting the corresponding version number component.
 #[derive(Clone, Debug, Deserialize, PartialEq, PartialOrd, Serialize)]
 #[serde(rename = "version")]
 #[serde(rename_all = "kebab-case")]
@@ -65,6 +109,36 @@ pub trait CreateWithParam<Param>: Sized {
 #[serde(into = "String")]
 pub struct VersionConfig(Version);
 
+/// Configuration object for [`VersionRange`]s.
+///
+/// This is not a compound type; its serialized format is a string,
+/// which is the same format parsed by `VersionRange`'s [`TryFrom`]
+/// instance for `&str`.
+///
+/// # Format
+///
+/// The serialized format has several modes, each of which has a
+/// "range element subformat.  The range element is expressed as one
+/// of the following:
+///
+/// - `major.*`: Matches any version with the given major number.
+///
+/// - `major.minor.*`: Matches any version with the given major and minor
+///   numbers.
+///
+/// - `major.minor.sub`: Matches an exact version.
+///
+/// Version ranges can then be expressed in any of the following
+/// modes:
+///
+/// - `*`: Matches any version.
+///
+/// - `<=elem`: Matches any version less than or equal to a range element.
+///
+/// - `>=elem`: Matches any version greater than or equal to a range element.
+///
+/// - `elem-elem`: Matches any version between (inclusively) the two range
+///   elements.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename = "version-range")]
 #[serde(rename_all = "kebab-case")]
@@ -72,7 +146,27 @@ pub struct VersionConfig(Version);
 #[serde(into = "String")]
 pub struct VersionRangeConfig(VersionRange);
 
-/// Allowed verification flags.
+/// Configuration object for
+/// [`CompoundHashAlgo`](crate::hashid::CompoundHashAlgo).
+///
+/// This specifies the type of hash to use.  This is not a compound
+/// format, and is parsed directly from a string.
+///
+/// # Format
+///
+/// The format consists of the name of the hash.  The options are:
+///
+/// - `blake2b`: The Blake2b hash function.
+///
+/// - `ripemd160`: The RipeMD160 hash function.
+///
+/// - `SHA3`: The SHA3 (Keccak) hash function.
+///
+/// - `SHA384`: The SHA2-384 hash function.
+///
+/// - `skein`: The Skein hash function in 512 bit mode.
+///
+/// - `whirlpool`: The Whirlpool hash function.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[serde(untagged)]
 #[serde(try_from = "String")]
@@ -91,6 +185,7 @@ pub enum CompoundHashAlgoConfig {
     Whirlpool
 }
 
+/// Error that can occur parsing [`CompoundHashAlgoConfig`]s.
 pub struct BadHash(String);
 
 impl Default for CompoundHashAlgoConfig {
