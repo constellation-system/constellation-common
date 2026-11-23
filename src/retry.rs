@@ -290,8 +290,8 @@ impl Retry {
     ///   computing the linear component.  Unlike the exponential component,
     ///   this value is unbounded by default.
     ///
-    /// - `max_random`: The maximum value for a randomly-distributed addend.
-    ///   The minimum is always `0`.
+    /// - `max_random`: The maximum value for a randomly-distributed addend. The
+    ///   minimum is always `0`.
     ///
     /// - `addend`: A constant addend.
     ///
