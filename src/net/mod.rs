@@ -54,6 +54,7 @@ use crate::error::ScopedError;
 use crate::error::WithMutexPoison;
 use crate::unix::UnixSocketAddr;
 
+#[doc(hidden)]
 pub mod test;
 
 /// Trait for sessions with an individual peer address.

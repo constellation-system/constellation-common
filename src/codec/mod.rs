@@ -37,6 +37,7 @@ use std::io::Read;
 use std::io::Write;
 
 pub mod per;
+#[doc(hidden)]
 pub mod test;
 
 use crate::config::Create;
